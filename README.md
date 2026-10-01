@@ -1,17 +1,24 @@
-# flutter_application_1
+# MediHelp
 
-A new Flutter project.
+MediQueue is a Flutter hospital appointment and queue management app with
+patient, receptionist, and admin roles.
 
-## Getting Started
+## Current Features
 
-This project is a starting point for a Flutter application.
+- Firebase email/password authentication with Firestore role validation.
+- Patient appointment booking flow with doctor, date, time, and confirmation screens.
+- Patient appointment, queue status, queue details, and notifications screens.
+- Material 3 theme and reusable UI widgets.
 
-A few resources to get you started if this is your first Flutter project:
+## Run Locally
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Deploy Firestore rules with:
+
+```bash
+firebase deploy --only firestore:rules
+```
