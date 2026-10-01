@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "570197047695",
+    "project_id": "medihelp-2cbab",
+    "storage_bucket": "medihelp-2cbab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:570197047695:android:d03c69925b1b2ec0ec73fa",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCR6iXkmBVW8NXH9tXv3XaPh2Z59M0bW-8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
