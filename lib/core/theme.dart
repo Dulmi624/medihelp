@@ -11,6 +11,8 @@ abstract final class AppColors {
   static const text = Color(0xFF172B4D);
   static const mutedText = Color(0xFF70809A);
   static const border = Color(0xFFD9E2F0);
+  static const surface = Color(0xFFFFFFFF);
+  static const onPrimary = Color(0xFFFFFFFF);
 }
 
 abstract final class AppTheme {

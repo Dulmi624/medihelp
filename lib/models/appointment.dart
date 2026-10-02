@@ -7,6 +7,7 @@ class Appointment {
     required this.date,
     required this.time,
     required this.location,
+    this.dateLabel = '',
     this.patientName = '',
     this.nic = '',
     this.contactNumber = '',
@@ -18,6 +19,7 @@ class Appointment {
   final DateTime date;
   final String time;
   final String location;
+  final String dateLabel;
   final String patientName;
   final String nic;
   final String contactNumber;
@@ -35,6 +37,7 @@ class Appointment {
       date: date,
       time: time,
       location: location,
+      dateLabel: dateLabel,
       patientName: patientName ?? this.patientName,
       nic: nic ?? this.nic,
       contactNumber: contactNumber ?? this.contactNumber,

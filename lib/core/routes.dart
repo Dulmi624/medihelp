@@ -6,6 +6,7 @@ import '../screens/auth/splash_screen.dart';
 import '../screens/admin/admin_home_screen.dart';
 import '../screens/patient/patient_home_screen.dart';
 import '../screens/patient/booking_success_screen.dart';
+import '../screens/patient/coming_soon_screen.dart';
 import '../screens/patient/confirm_booking_screen.dart';
 import '../screens/patient/my_appointment_screen.dart';
 import '../screens/patient/notifications_screen.dart';
@@ -22,6 +23,7 @@ abstract final class AppRoutes {
   static const login = '/login';
   static const patientSignUp = '/patient-sign-up';
   static const patientHome = '/patient';
+  static const comingSoon = '/patient/coming-soon';
   static const selectDoctor = '/patient/select-doctor';
   static const selectDateTime = '/patient/select-date-time';
   static const confirmBooking = '/patient/confirm-booking';
@@ -42,6 +44,7 @@ abstract final class AppRoutes {
         login => const LoginScreen(),
         patientSignUp => const PatientSignUpScreen(),
         patientHome => const PatientHomeScreen(),
+        comingSoon => const ComingSoonScreen(),
         selectDoctor => const SelectDoctorScreen(),
         selectDateTime => SelectDateTimeScreen(doctor: arguments is Doctor ? arguments : throw ArgumentError('Doctor is required')),
         confirmBooking => ConfirmBookingScreen(doctor: (arguments as Map)['doctor'] as Doctor, date: arguments['date'] as DateTime, time: arguments['time'] as String),
@@ -49,7 +52,7 @@ abstract final class AppRoutes {
         myAppointment => const MyAppointmentScreen(),
         queueStatus => const QueueStatusScreen(),
         queueDetails => const QueueDetailsScreen(),
-        notifications => const NotificationsScreen(),
+        notifications => NotificationsScreen(initialTab: arguments is int ? arguments : 0),
         receptionistHome => const ReceptionistHomeScreen(),
         adminHome => const AdminHomeScreen(),
         _ => const SplashScreen(),
