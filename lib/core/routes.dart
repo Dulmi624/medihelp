@@ -15,6 +15,8 @@ import '../screens/patient/queue_status_screen.dart';
 import '../screens/receptionist/receptionist_home_screen.dart';
 import '../screens/patient/select_date_time_screen.dart';
 import '../screens/patient/select_doctor_screen.dart';
+import '../screens/patient/hospital_info_screen.dart';
+import '../screens/patient/contact_us_screen.dart';
 import '../models/appointment.dart';
 import '../models/doctor.dart';
 
@@ -25,6 +27,9 @@ abstract final class AppRoutes {
   static const patientHome = '/patient';
   static const comingSoon = '/patient/coming-soon';
   static const selectDoctor = '/patient/select-doctor';
+  static const findDoctor = '/patient/find-doctor';
+  static const hospitalInfo = '/patient/hospital-info';
+  static const contactUs = '/patient/contact-us';
   static const selectDateTime = '/patient/select-date-time';
   static const confirmBooking = '/patient/confirm-booking';
   static const bookingSuccess = '/patient/booking-success';
@@ -46,13 +51,37 @@ abstract final class AppRoutes {
         patientHome => const PatientHomeScreen(),
         comingSoon => const ComingSoonScreen(),
         selectDoctor => const SelectDoctorScreen(),
-        selectDateTime => SelectDateTimeScreen(doctor: arguments is Doctor ? arguments : throw ArgumentError('Doctor is required')),
-        confirmBooking => ConfirmBookingScreen(doctor: (arguments as Map)['doctor'] as Doctor, date: arguments['date'] as DateTime, time: arguments['time'] as String),
-        bookingSuccess => BookingSuccessScreen(appointment: arguments is Appointment ? arguments : throw ArgumentError('Appointment is required')),
+        findDoctor => const SelectDoctorScreen(
+          title: 'Find a Doctor',
+          showBookingSteps: false,
+        ),
+        hospitalInfo => const HospitalInfoScreen(),
+        contactUs => const ContactUsScreen(),
+        selectDateTime => SelectDateTimeScreen(
+          doctor: arguments is Doctor
+              ? arguments
+              : (arguments as Map)['doctor'] as Doctor,
+          existingAppointment: arguments is Map
+              ? arguments['existingAppointment'] as Appointment?
+              : null,
+        ),
+        confirmBooking => ConfirmBookingScreen(
+          doctor: (arguments as Map)['doctor'] as Doctor,
+          date: arguments['date'] as DateTime,
+          time: arguments['time'] as String,
+          existingAppointment: arguments['existingAppointment'] as Appointment?,
+        ),
+        bookingSuccess => BookingSuccessScreen(
+          appointment: arguments is Appointment
+              ? arguments
+              : throw ArgumentError('Appointment is required'),
+        ),
         myAppointment => const MyAppointmentScreen(),
         queueStatus => const QueueStatusScreen(),
         queueDetails => const QueueDetailsScreen(),
-        notifications => NotificationsScreen(initialTab: arguments is int ? arguments : 0),
+        notifications => NotificationsScreen(
+          initialTab: arguments is int ? arguments : 0,
+        ),
         receptionistHome => const ReceptionistHomeScreen(),
         adminHome => const AdminHomeScreen(),
         _ => const SplashScreen(),

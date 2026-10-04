@@ -12,6 +12,7 @@ class Appointment {
     this.nic = '',
     this.contactNumber = '',
     this.email = '',
+    this.isCancelled = false,
   });
 
   final String number;
@@ -24,12 +25,14 @@ class Appointment {
   final String nic;
   final String contactNumber;
   final String email;
+  final bool isCancelled;
 
   Appointment copyWith({
     String? patientName,
     String? nic,
     String? contactNumber,
     String? email,
+    bool? isCancelled,
   }) {
     return Appointment(
       number: number,
@@ -42,6 +45,7 @@ class Appointment {
       nic: nic ?? this.nic,
       contactNumber: contactNumber ?? this.contactNumber,
       email: email ?? this.email,
+      isCancelled: isCancelled ?? this.isCancelled,
     );
   }
 }

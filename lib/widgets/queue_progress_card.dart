@@ -17,11 +17,42 @@ class QueueProgressCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Queue Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Text(
+              'Queue Progress',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 14),
-            LinearProgressIndicator(value: queue.served / queue.totalInQueue, minHeight: 10, borderRadius: BorderRadius.circular(8)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Stack(
+                children: [
+                  Container(height: 11, color: AppColors.primarySoft),
+                  FractionallySizedBox(
+                    widthFactor: queue.served / queue.totalInQueue,
+                    child: Container(
+                      height: 11,
+                      decoration: const BoxDecoration(
+                        gradient: AppGradients.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 10),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${queue.served} of ${queue.totalInQueue} served'), Text('${queue.waiting} waiting', style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700))]),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('${queue.served} of ${queue.totalInQueue} served'),
+                Text(
+                  '${queue.waiting} waiting',
+                  style: const TextStyle(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
