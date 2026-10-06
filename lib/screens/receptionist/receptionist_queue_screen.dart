@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import 'queue_update_screen.dart';
 
 class ReceptionistQueueScreen extends StatefulWidget {
@@ -11,62 +13,77 @@ class ReceptionistQueueScreen extends StatefulWidget {
 
 class _ReceptionistQueueScreenState
     extends State<ReceptionistQueueScreen> {
-  final List<Map<String, dynamic>> patients = [
-    {
-      'queue': 'Q001',
-      'name': 'Sahan Perera',
-      'nic': '199876543210',
-      'doctor': 'Dr. N. Perera',
-      'department': 'General Medicine',
-      'time': '08:30 AM',
-      'status': 'In Consultation',
-    },
-    {
-      'queue': 'Q002',
-      'name': 'Nimal Fernando',
-      'nic': '199865432109',
-      'doctor': 'Dr. K. Kumarasinghe',
-      'department': 'Cardiology',
-      'time': '09:00 AM',
-      'status': 'Waiting',
-    },
-    {
-      'queue': 'Q003',
-      'name': 'Kavindi Silva',
-      'nic': '200012345678',
-      'doctor': 'Dr. Silva',
-      'department': 'Dermatology',
-      'time': '09:30 AM',
-      'status': 'Waiting',
-    },
-    {
-      'queue': 'Q004',
-      'name': 'Malee De Pera',
-      'nic': '199934567890',
-      'doctor': 'Dr. Perera',
-      'department': 'General Medicine',
-      'time': '10:00 AM',
-      'status': 'Waiting',
-    },
-    {
-      'queue': 'Q005',
-      'name': 'Ruvini Fernando',
-      'nic': '199945678901',
-      'doctor': 'Dr. Silva',
-      'department': 'Dermatology',
-      'time': '10:30 AM',
-      'status': 'Scheduled',
-    },
-    {
-      'queue': 'Q006',
-      'name': 'Kasun N.',
-      'nic': '200056789012',
-      'doctor': 'Dr. Kumarasinghe',
-      'department': 'Cardiology',
-      'time': '11:00 AM',
-      'status': 'Scheduled',
-    },
-  ];
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  final TextEditingController searchController =
+      TextEditingController();
+
+  String searchText = '';
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  // ============================================================
+  // STATUS DISPLAY
+  // ============================================================
+
+  String displayStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'waiting':
+        return 'Waiting';
+
+      case 'in_consultation':
+      case 'in consultation':
+      case 'consultation':
+        return 'In Consultation';
+
+      case 'completed':
+        return 'Completed';
+
+      case 'skipped':
+        return 'Skipped';
+
+      case 'scheduled':
+        return 'Scheduled';
+
+      default:
+        return status.isEmpty ? 'Waiting' : status;
+    }
+  }
+
+  // ============================================================
+  // FIRESTORE STATUS
+  // ============================================================
+
+  String firestoreStatus(String status) {
+    switch (status) {
+      case 'Waiting':
+        return 'waiting';
+
+      case 'In Consultation':
+        return 'in_consultation';
+
+      case 'Completed':
+        return 'completed';
+
+      case 'Skipped':
+        return 'skipped';
+
+      case 'Scheduled':
+        return 'scheduled';
+
+      default:
+        return status.toLowerCase();
+    }
+  }
+
+  // ============================================================
+  // STATUS COLOR
+  // ============================================================
 
   Color statusColor(String status) {
     switch (status) {
@@ -90,76 +107,220 @@ class _ReceptionistQueueScreenState
     }
   }
 
-  void callNext(int index) {
-    setState(() {
-      patients[index]['status'] = 'In Consultation';
-    });
+  // ============================================================
+  // CALL NEXT
+  // ============================================================
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${patients[index]['name']} has been called next.',
-        ),
-      ),
-    );
-  }
-
-  // ===============================================================
-  // OPEN QUEUE UPDATE SCREEN
-  // ===============================================================
-
-  Future<void> openQueueUpdate(int index) async {
-    final patient = patients[index];
-
-    final updatedStatus = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => QueueUpdateScreen(
-          queueNo: patient['queue'],
-          patientName: patient['name'],
-          nic: patient['nic'],
-          doctor: patient['doctor'],
-          department: patient['department'],
-          appointmentTime: patient['time'],
-          currentStatus: patient['status'],
-        ),
-      ),
-    );
-
-    // Update Queue Management screen after returning
-    if (updatedStatus != null && mounted) {
-      setState(() {
-        patients[index]['status'] = updatedStatus;
+  Future<void> callNext(
+    String documentId,
+    String patientName,
+  ) async {
+    try {
+      await _firestore
+          .collection('queues')
+          .doc(documentId)
+          .update({
+        'status': 'in_consultation',
+        'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${patient['name']} status updated to $updatedStatus.',
+            '$patientName has been called next.',
           ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to call patient: $e',
+          ),
+          backgroundColor: Colors.red,
         ),
       );
     }
   }
 
+  // ============================================================
+  // OPEN QUEUE UPDATE SCREEN
+  // ============================================================
+
+  Future<void> openQueueUpdate(
+    String documentId,
+    Map<String, dynamic> patient,
+  ) async {
+    final String currentStatus =
+        displayStatus(
+      patient['status']?.toString() ?? '',
+    );
+
+    final String? updatedStatus =
+        await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QueueUpdateScreen(
+          queueNo:
+              patient['queue']?.toString() ?? '',
+          patientName:
+              patient['name']?.toString() ?? '',
+          nic:
+              patient['nic']?.toString() ?? '',
+          doctor:
+              patient['doctor']?.toString() ?? '',
+          department:
+              patient['department']?.toString() ?? '',
+          appointmentTime:
+              patient['time']?.toString() ?? '',
+          currentStatus: currentStatus,
+        ),
+      ),
+    );
+
+    if (updatedStatus == null || !mounted) {
+      return;
+    }
+
+    try {
+      await _firestore
+          .collection('queues')
+          .doc(documentId)
+          .update({
+        'status':
+            firestoreStatus(updatedStatus),
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${patient['name'] ?? 'Patient'} '
+            'status updated to $updatedStatus.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to update queue: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // CONVERT FIRESTORE DOCUMENT
+  // ============================================================
+
+  Map<String, dynamic> convertQueueDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+
+    return {
+      'id': document.id,
+
+      'queue':
+          data['queueNumber']?.toString() ??
+          data['queue']?.toString() ??
+          document.id,
+
+      'name':
+          data['patientName']?.toString() ??
+          data['name']?.toString() ??
+          'Unknown Patient',
+
+      'nic':
+          data['nic']?.toString() ?? '',
+
+      'doctor':
+          data['doctorName']?.toString() ??
+          data['doctor']?.toString() ??
+          '',
+
+      'department':
+          data['department']?.toString() ??
+          data['clinic']?.toString() ??
+          '',
+
+      'time':
+          data['appointmentTime']?.toString() ??
+          data['time']?.toString() ??
+          '',
+
+      'status':
+          displayStatus(
+        data['status']?.toString() ?? '',
+      ),
+
+      'patientId':
+          data['patientId']?.toString() ?? '',
+
+      'appointmentId':
+          data['appointmentId']?.toString() ?? '',
+    };
+  }
+
+  // ============================================================
+  // SEARCH
+  // ============================================================
+
+  bool matchesSearch(
+    Map<String, dynamic> patient,
+  ) {
+    final search =
+        searchText.trim().toLowerCase();
+
+    if (search.isEmpty) {
+      return true;
+    }
+
+    final queue =
+        patient['queue']?.toString().toLowerCase() ?? '';
+
+    final name =
+        patient['name']?.toString().toLowerCase() ?? '';
+
+    final nic =
+        patient['nic']?.toString().toLowerCase() ?? '';
+
+    final doctor =
+        patient['doctor']?.toString().toLowerCase() ?? '';
+
+    return queue.contains(search) ||
+        name.contains(search) ||
+        nic.contains(search) ||
+        doctor.contains(search);
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
-    final waitingCount =
-        patients.where((p) => p['status'] == 'Waiting').length;
-
-    final consultationCount = patients
-        .where((p) => p['status'] == 'In Consultation')
-        .length;
-
-    final completedCount =
-        patients.where((p) => p['status'] == 'Completed').length;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F7FF),
+      backgroundColor:
+          const Color(0xFFF1F7FF),
 
-      // ===========================================================
+      // ==========================================================
       // APP BAR
-      // ===========================================================
+      // ==========================================================
 
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -170,22 +331,26 @@ class _ReceptionistQueueScreenState
             Icons.arrow_back,
             color: Colors.black87,
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
 
         title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Text(
               'Queue Management',
               style: TextStyle(
                 color: Color(0xFF2563EB),
                 fontWeight: FontWeight.bold,
+                fontSize: 18,
               ),
             ),
 
             Text(
-              'Manage today\'s patient queue',
+              "Manage today's patient queue",
               style: TextStyle(
                 color: Colors.grey,
                 fontSize: 12,
@@ -195,200 +360,384 @@ class _ReceptionistQueueScreenState
         ),
       ),
 
-      // ===========================================================
-      // BODY
-      // ===========================================================
+      // ==========================================================
+      // FIRESTORE STREAM
+      // ==========================================================
 
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: StreamBuilder<
+          QuerySnapshot<Map<String, dynamic>>>(
+        stream: _firestore
+            .collection('queues')
+            .snapshots(),
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding:
+                    const EdgeInsets.all(20),
+                child: Text(
+                  'Error loading queue.\n\n'
+                  '${snapshot.error}',
+                  textAlign:
+                      TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            );
+          }
 
-          children: [
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
+            return const Center(
+              child:
+                  CircularProgressIndicator(),
+            );
+          }
 
-            // =====================================================
-            // DATE AND OPD
-            // =====================================================
+          final allPatients =
+              snapshot.data!.docs
+                  .map(
+                    convertQueueDocument,
+                  )
+                  .toList();
 
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
+          final filteredPatients =
+              allPatients
+                  .where(matchesSearch)
+                  .toList();
+
+          return _buildBody(
+            filteredPatients,
+          );
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // BODY
+  // ============================================================
+
+  Widget _buildBody(
+    List<Map<String, dynamic>> patients,
+  ) {
+    final waitingCount = patients
+        .where(
+          (p) =>
+              p['status'] == 'Waiting',
+        )
+        .length;
+
+    final consultationCount = patients
+        .where(
+          (p) =>
+              p['status'] ==
+              'In Consultation',
+        )
+        .length;
+
+    final completedCount = patients
+        .where(
+          (p) =>
+              p['status'] ==
+              'Completed',
+        )
+        .length;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
+        children: [
+          // ======================================================
+          // DATE AND OPD
+          // ======================================================
+
+          Container(
+            padding:
+                const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+
+            decoration: BoxDecoration(
+              color: Colors.white,
+
+              borderRadius:
+                  BorderRadius.circular(14),
+
+              border: Border.all(
+                color:
+                    const Color(0xFFD6E5FF),
+              ),
+            ),
+
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_month,
+                  color: Color(0xFF3B82F6),
+                ),
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Text(
+                    'Today, ${_todayDate()}',
+                    style:
+                        const TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          FontWeight.w500,
+                    ),
+                  ),
+                ),
+
+                const Icon(
+                  Icons.location_on_outlined,
+                  color: Colors.grey,
+                ),
+
+                const SizedBox(width: 4),
+
+                const Text(
+                  'OPD 1',
+                  style: TextStyle(
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ======================================================
+          // STATISTICS
+          // ======================================================
+
+          Row(
+            children: [
+              _statCard(
+                icon:
+                    Icons.people_outline,
+                value:
+                    patients.length.toString(),
+                label:
+                    'Total Patients',
+                iconColor:
+                    Colors.blue,
               ),
 
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFFD6E5FF),
+              const SizedBox(width: 10),
+
+              _statCard(
+                icon:
+                    Icons.access_time,
+                value:
+                    waitingCount.toString(),
+                label:
+                    'Waiting',
+                iconColor:
+                    Colors.orange,
+              ),
+
+              const SizedBox(width: 10),
+
+              _statCard(
+                icon:
+                    Icons.medical_services_outlined,
+                value:
+                    consultationCount.toString(),
+                label:
+                    'In Consultation',
+                iconColor:
+                    Colors.deepPurple,
+              ),
+
+              const SizedBox(width: 10),
+
+              _statCard(
+                icon:
+                    Icons.check_circle_outline,
+                value:
+                    completedCount.toString(),
+                label:
+                    'Completed',
+                iconColor:
+                    Colors.green,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ======================================================
+          // QUEUE TITLE + SEARCH
+          // ======================================================
+
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Queue List',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight:
+                        FontWeight.bold,
+                    color:
+                        Color(0xFF2563EB),
+                  ),
                 ),
               ),
 
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.calendar_month,
-                    color: Color(0xFF3B82F6),
-                  ),
+              SizedBox(
+                width: 250,
 
-                  const SizedBox(width: 12),
+                child: TextField(
+                  controller:
+                      searchController,
 
-                  const Expanded(
-                    child: Text(
-                      'Today, 02 October 2026',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                  onChanged: (value) {
+                    setState(() {
+                      searchText = value;
+                    });
+                  },
+
+                  decoration:
+                      InputDecoration(
+                    hintText:
+                        'Search patient or queue no...',
+
+                    prefixIcon:
+                        const Icon(
+                      Icons.search,
+                    ),
+
+                    filled: true,
+
+                    fillColor:
+                        Colors.white,
+
+                    contentPadding:
+                        const EdgeInsets
+                            .symmetric(
+                      vertical: 12,
+                    ),
+
+                    border:
+                        OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        12,
+                      ),
+
+                      borderSide:
+                          const BorderSide(
+                        color:
+                            Color(0xFFD6E5FF),
                       ),
                     ),
                   ),
+                ),
+              ),
+            ],
+          ),
 
-                  const Icon(
-                    Icons.location_on_outlined,
+          const SizedBox(height: 12),
+
+          // ======================================================
+          // QUEUE LIST
+          // ======================================================
+
+          if (patients.isEmpty)
+            Container(
+              width: double.infinity,
+
+              padding:
+                  const EdgeInsets.all(35),
+
+              decoration: BoxDecoration(
+                color: Colors.white,
+
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
+                ),
+
+                border: Border.all(
+                  color:
+                      const Color(0xFFD6E5FF),
+                ),
+              ),
+
+              child: const Column(
+                children: [
+                  Icon(
+                    Icons.queue_outlined,
+                    size: 48,
                     color: Colors.grey,
                   ),
 
-                  const SizedBox(width: 4),
+                  SizedBox(height: 12),
 
-                  const Text(
-                    'OPD 1',
+                  Text(
+                    'No queue patients found',
                     style: TextStyle(
                       color: Colors.grey,
+                      fontWeight:
+                          FontWeight.w600,
                     ),
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // =====================================================
-            // STATISTICS
-            // =====================================================
-
-            Row(
-              children: [
-                _statCard(
-                  icon: Icons.people_outline,
-                  value: patients.length.toString(),
-                  label: 'Total Patients',
-                  iconColor: Colors.blue,
-                ),
-
-                const SizedBox(width: 10),
-
-                _statCard(
-                  icon: Icons.access_time,
-                  value: waitingCount.toString(),
-                  label: 'Waiting',
-                  iconColor: Colors.orange,
-                ),
-
-                const SizedBox(width: 10),
-
-                _statCard(
-                  icon: Icons.medical_services_outlined,
-                  value: consultationCount.toString(),
-                  label: 'In Consultation',
-                  iconColor: Colors.deepPurple,
-                ),
-
-                const SizedBox(width: 10),
-
-                _statCard(
-                  icon: Icons.check_circle_outline,
-                  value: completedCount.toString(),
-                  label: 'Completed',
-                  iconColor: Colors.green,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // =====================================================
-            // QUEUE TITLE
-            // =====================================================
-
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Queue List',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2563EB),
-                    ),
-                  ),
-                ),
-
-                SizedBox(
-                  width: 250,
-
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText:
-                          'Search patient or queue no...',
-                      prefixIcon:
-                          const Icon(Icons.search),
-
-                      filled: true,
-                      fillColor: Colors.white,
-
-                      contentPadding:
-                          const EdgeInsets.symmetric(
-                        vertical: 12,
-                      ),
-
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(12),
-
-                        borderSide: const BorderSide(
-                          color: Color(0xFFD6E5FF),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // =====================================================
-            // QUEUE LIST
-            // =====================================================
-
+            )
+          else
             Container(
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
+                ),
+
                 border: Border.all(
-                  color: const Color(0xFFD6E5FF),
+                  color:
+                      const Color(0xFFD6E5FF),
                 ),
               ),
 
               child: Column(
                 children: [
-
-                  // -------------------------------------------------
                   // HEADER
-                  // -------------------------------------------------
 
                   Container(
-                    padding: const EdgeInsets.symmetric(
+                    padding:
+                        const EdgeInsets
+                            .symmetric(
                       horizontal: 16,
                       vertical: 14,
                     ),
 
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF8FAFC),
+                    decoration:
+                        const BoxDecoration(
+                      color:
+                          Color(0xFFF8FAFC),
 
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(14),
+                      borderRadius:
+                          BorderRadius.vertical(
+                        top:
+                            Radius.circular(
+                          14,
+                        ),
                       ),
                     ),
 
@@ -399,7 +748,8 @@ class _ReceptionistQueueScreenState
                           child: Text(
                             '#',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
@@ -409,7 +759,8 @@ class _ReceptionistQueueScreenState
                           child: Text(
                             'Q NO.',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
@@ -419,7 +770,8 @@ class _ReceptionistQueueScreenState
                           child: Text(
                             'PATIENT',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
@@ -428,7 +780,8 @@ class _ReceptionistQueueScreenState
                           child: Text(
                             'TIME',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
@@ -438,7 +791,8 @@ class _ReceptionistQueueScreenState
                           child: Text(
                             'STATUS',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
@@ -448,7 +802,8 @@ class _ReceptionistQueueScreenState
                           child: Text(
                             'ACTION',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
@@ -456,37 +811,44 @@ class _ReceptionistQueueScreenState
                     ),
                   ),
 
-                  // -------------------------------------------------
-                  // PATIENT ROWS
-                  // -------------------------------------------------
+                  // ROWS
 
                   ...List.generate(
                     patients.length,
                     (index) {
-                      final patient = patients[index];
+                      final patient =
+                          patients[index];
+
+                      final status =
+                          patient['status']
+                              .toString();
 
                       final color =
-                          statusColor(patient['status']);
+                          statusColor(status);
 
                       return Container(
                         padding:
-                            const EdgeInsets.symmetric(
+                            const EdgeInsets
+                                .symmetric(
                           horizontal: 16,
                           vertical: 14,
                         ),
 
-                        decoration: BoxDecoration(
+                        decoration:
+                            BoxDecoration(
                           border: Border(
                             top: BorderSide(
-                              color: Colors.grey.shade200,
+                              color: Colors
+                                  .grey
+                                  .shade200,
                             ),
                           ),
                         ),
 
                         child: Row(
                           children: [
-
                             // NUMBER
+
                             SizedBox(
                               width: 50,
                               child: Text(
@@ -495,43 +857,63 @@ class _ReceptionistQueueScreenState
                             ),
 
                             // QUEUE NUMBER
+
                             SizedBox(
                               width: 80,
                               child: Text(
-                                patient['queue'],
-                                style: const TextStyle(
+                                patient[
+                                        'queue']
+                                    .toString(),
+
+                                style:
+                                    const TextStyle(
                                   color:
-                                      Color(0xFF2563EB),
+                                      Color(
+                                    0xFF2563EB,
+                                  ),
                                   fontWeight:
-                                      FontWeight.bold,
+                                      FontWeight
+                                          .bold,
                                 ),
                               ),
                             ),
 
                             // PATIENT
+
                             Expanded(
                               flex: 2,
 
                               child: Column(
                                 crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                    CrossAxisAlignment
+                                        .start,
 
                                 children: [
                                   Text(
-                                    patient['name'],
+                                    patient[
+                                            'name']
+                                        .toString(),
+
                                     style:
                                         const TextStyle(
                                       fontWeight:
-                                          FontWeight.w600,
+                                          FontWeight
+                                              .w600,
                                     ),
                                   ),
 
                                   Text(
-                                    patient['doctor'],
+                                    patient[
+                                            'doctor']
+                                        .toString(),
+
                                     style:
                                         const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
+                                      fontSize:
+                                          12,
+                                      color:
+                                          Colors
+                                              .grey,
                                     ),
                                   ),
                                 ],
@@ -539,45 +921,62 @@ class _ReceptionistQueueScreenState
                             ),
 
                             // TIME
+
                             Expanded(
                               child: Text(
-                                patient['time'],
+                                patient[
+                                        'time']
+                                    .toString(),
                               ),
                             ),
 
                             // STATUS
+
                             Expanded(
                               flex: 2,
 
                               child: Align(
                                 alignment:
-                                    Alignment.centerLeft,
+                                    Alignment
+                                        .centerLeft,
 
-                                child: Container(
+                                child:
+                                    Container(
                                   padding:
                                       const EdgeInsets
                                           .symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
+                                    horizontal:
+                                        10,
+                                    vertical:
+                                        6,
                                   ),
 
                                   decoration:
                                       BoxDecoration(
                                     color: color
-                                        .withOpacity(0.1),
+                                        .withOpacity(
+                                      0.1,
+                                    ),
 
                                     borderRadius:
                                         BorderRadius
-                                            .circular(20),
+                                            .circular(
+                                      20,
+                                    ),
                                   ),
 
                                   child: Text(
-                                    patient['status'],
-                                    style: TextStyle(
-                                      color: color,
-                                      fontSize: 12,
+                                    status,
+
+                                    style:
+                                        TextStyle(
+                                      color:
+                                          color,
+                                      fontSize:
+                                          12,
                                       fontWeight:
-                                          FontWeight.bold,
+                                          FontWeight
+                                              .bold,
                                     ),
                                   ),
                                 ),
@@ -585,15 +984,24 @@ class _ReceptionistQueueScreenState
                             ),
 
                             // ACTION
+
                             SizedBox(
                               width: 120,
 
                               child:
-                                  patient['status'] ==
+                                  status ==
                                           'Waiting'
                                       ? ElevatedButton(
-                                          onPressed: () =>
-                                              callNext(index),
+                                          onPressed:
+                                              () =>
+                                                  callNext(
+                                            patient[
+                                                    'id']
+                                                .toString(),
+                                            patient[
+                                                    'name']
+                                                .toString(),
+                                          ),
 
                                           style:
                                               ElevatedButton
@@ -604,12 +1012,14 @@ class _ReceptionistQueueScreenState
                                             ),
 
                                             foregroundColor:
-                                                Colors.white,
+                                                Colors
+                                                    .white,
 
                                             padding:
                                                 const EdgeInsets
                                                     .symmetric(
-                                              vertical: 10,
+                                              vertical:
+                                                  10,
                                             ),
                                           ),
 
@@ -619,9 +1029,13 @@ class _ReceptionistQueueScreenState
                                           ),
                                         )
                                       : OutlinedButton(
-                                          onPressed: () =>
-                                              openQueueUpdate(
-                                            index,
+                                          onPressed:
+                                              () =>
+                                                  openQueueUpdate(
+                                            patient[
+                                                    'id']
+                                                .toString(),
+                                            patient,
                                           ),
 
                                           child:
@@ -638,15 +1052,39 @@ class _ReceptionistQueueScreenState
                 ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  // ===============================================================
+  // ============================================================
+  // TODAY DATE
+  // ============================================================
+
+  String _todayDate() {
+    final now = DateTime.now();
+
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    return '${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  // ============================================================
   // STAT CARD
-  // ===============================================================
+  // ============================================================
 
   Widget _statCard({
     required IconData icon,
@@ -656,16 +1094,21 @@ class _ReceptionistQueueScreenState
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(
+        padding:
+            const EdgeInsets.symmetric(
           vertical: 18,
           horizontal: 10,
         ),
 
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+
+          borderRadius:
+              BorderRadius.circular(14),
+
           border: Border.all(
-            color: const Color(0xFFD6E5FF),
+            color:
+                const Color(0xFFD6E5FF),
           ),
         ),
 
@@ -683,7 +1126,8 @@ class _ReceptionistQueueScreenState
               value,
               style: const TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
 
@@ -691,7 +1135,9 @@ class _ReceptionistQueueScreenState
 
             Text(
               label,
-              textAlign: TextAlign.center,
+              textAlign:
+                  TextAlign.center,
+
               style: const TextStyle(
                 color: Colors.grey,
                 fontSize: 11,

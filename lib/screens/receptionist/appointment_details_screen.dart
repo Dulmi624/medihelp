@@ -1,21 +1,26 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class AppointmentDetailsScreen extends StatefulWidget {
+  final String appointmentId;
   final String patientName;
   final String nic;
   final String doctor;
   final String time;
   final String department;
   final String status;
+  final String date;
 
   const AppointmentDetailsScreen({
     super.key,
+    required this.appointmentId,
     required this.patientName,
     required this.nic,
     required this.doctor,
     required this.time,
     required this.department,
     required this.status,
+    required this.date,
   });
 
   @override
@@ -29,9 +34,13 @@ class _AppointmentDetailsScreenState
   late String selectedTime;
   late String selectedStatus;
 
-  DateTime selectedDate = DateTime(2026, 10, 2);
+  late DateTime selectedDate;
 
   bool isEditing = false;
+  bool isSaving = false;
+
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
 
   final List<String> doctors = [
     'Dr. N. Perera',
@@ -58,6 +67,55 @@ class _AppointmentDetailsScreenState
     selectedDoctor = widget.doctor;
     selectedTime = widget.time;
     selectedStatus = widget.status;
+
+    selectedDate = _parseDate(widget.date);
+  }
+
+  // ============================================================
+  // DATE PARSER
+  // ============================================================
+
+  DateTime _parseDate(String value) {
+    if (value.isEmpty) {
+      return DateTime.now();
+    }
+
+    final parsed = DateTime.tryParse(value);
+
+    if (parsed != null) {
+      return parsed;
+    }
+
+    final parts = value.split(' ');
+
+    if (parts.length >= 3) {
+      try {
+        const months = {
+          'January': 1,
+          'February': 2,
+          'March': 3,
+          'April': 4,
+          'May': 5,
+          'June': 6,
+          'July': 7,
+          'August': 8,
+          'September': 9,
+          'October': 10,
+          'November': 11,
+          'December': 12,
+        };
+
+        final day = int.parse(parts[0]);
+        final month = months[parts[1]];
+        final year = int.parse(parts[2]);
+
+        if (month != null) {
+          return DateTime(year, month, day);
+        }
+      } catch (_) {}
+    }
+
+    return DateTime.now();
   }
 
   // ============================================================
@@ -80,31 +138,66 @@ class _AppointmentDetailsScreenState
   }
 
   // ============================================================
-  // SAVE CHANGES
+  // SAVE CHANGES TO FIRESTORE
   // ============================================================
 
-  void _saveChanges() {
-    // Return the updated appointment data to
-    // Appointment Management screen.
-    Navigator.pop(
-      context,
-      {
-        'status': selectedStatus,
-        'patientName': widget.patientName,
-        'nic': widget.nic,
-        'doctor': selectedDoctor,
+  Future<void> _saveChanges() async {
+    if (isSaving) return;
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      await _firestore
+          .collection('appointments')
+          .doc(widget.appointmentId)
+          .update({
+        'doctorName': selectedDoctor,
         'time': selectedTime,
-        'department': widget.department,
         'date': _formatDate(selectedDate),
-      },
-    );
+        'status': _firestoreStatus(selectedStatus),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+        isEditing = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Appointment updated successfully.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to update appointment: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // ============================================================
   // CANCEL APPOINTMENT
   // ============================================================
 
-  void _cancelAppointment() {
+  Future<void> _cancelAppointment() async {
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -143,28 +236,10 @@ class _AppointmentDetailsScreenState
               ),
             ),
             ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  selectedStatus = 'Cancelled';
-                });
-
-                // Close confirmation dialog
+              onPressed: () async {
                 Navigator.pop(dialogContext);
 
-                // Return cancelled appointment
-                // to Appointment Management screen
-                Navigator.pop(
-                  context,
-                  {
-                    'status': 'Cancelled',
-                    'patientName': widget.patientName,
-                    'nic': widget.nic,
-                    'doctor': selectedDoctor,
-                    'time': selectedTime,
-                    'department': widget.department,
-                    'date': _formatDate(selectedDate),
-                  },
-                );
+                await _cancelAppointmentInFirebase();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
@@ -178,6 +253,67 @@ class _AppointmentDetailsScreenState
         );
       },
     );
+  }
+
+  Future<void> _cancelAppointmentInFirebase() async {
+    try {
+      await _firestore
+          .collection('appointments')
+          .doc(widget.appointmentId)
+          .update({
+        'status': 'cancelled',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Appointment cancelled successfully.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to cancel appointment: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // FIRESTORE STATUS
+  // ============================================================
+
+  String _firestoreStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'upcoming':
+        return 'scheduled';
+
+      case 'checked in':
+      case 'checked-in':
+        return 'checked_in';
+
+      case 'completed':
+        return 'completed';
+
+      case 'cancelled':
+      case 'canceled':
+        return 'cancelled';
+
+      default:
+        return status.toLowerCase();
+    }
   }
 
   // ============================================================
@@ -211,10 +347,6 @@ class _AppointmentDetailsScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F7FF),
-
-      // ========================================================
-      // APP BAR
-      // ========================================================
 
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -252,15 +384,12 @@ class _AppointmentDetailsScreenState
         ),
       ),
 
-      // ========================================================
-      // BODY
-      // ========================================================
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+
           children: [
             // ==================================================
             // PATIENT INFORMATION
@@ -293,7 +422,7 @@ class _AppointmentDetailsScreenState
                   _infoRow(
                     Icons.phone_outlined,
                     'Contact Number',
-                    '077 123 4567',
+                    'Contact number not available',
                   ),
                 ],
               ),
@@ -313,7 +442,6 @@ class _AppointmentDetailsScreenState
             _whiteCard(
               child: Column(
                 children: [
-                  // DATE
                   _infoRow(
                     Icons.calendar_today_outlined,
                     'Date',
@@ -322,7 +450,6 @@ class _AppointmentDetailsScreenState
 
                   _divider(),
 
-                  // TIME
                   _infoRow(
                     Icons.access_time_outlined,
                     'Time',
@@ -331,7 +458,6 @@ class _AppointmentDetailsScreenState
 
                   _divider(),
 
-                  // DOCTOR
                   _infoRow(
                     Icons.person_outline,
                     'Doctor',
@@ -340,7 +466,6 @@ class _AppointmentDetailsScreenState
 
                   _divider(),
 
-                  // DEPARTMENT
                   _infoRow(
                     Icons.local_hospital_outlined,
                     'OPD / Clinic',
@@ -349,7 +474,6 @@ class _AppointmentDetailsScreenState
 
                   _divider(),
 
-                  // STATUS
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       vertical: 14,
@@ -427,6 +551,7 @@ class _AppointmentDetailsScreenState
                 child: Column(
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
+
                   children: [
                     const Text(
                       'Appointment Date',
@@ -440,6 +565,7 @@ class _AppointmentDetailsScreenState
 
                     InkWell(
                       onTap: _selectDate,
+
                       child: Container(
                         width: double.infinity,
 
@@ -453,9 +579,10 @@ class _AppointmentDetailsScreenState
                           color: Colors.white,
                           borderRadius:
                               BorderRadius.circular(10),
-
                           border: Border.all(
-                            color: const Color(0xFFD6E4F5),
+                            color: const Color(
+                              0xFFD6E4F5,
+                            ),
                           ),
                         ),
 
@@ -499,14 +626,15 @@ class _AppointmentDetailsScreenState
                     const SizedBox(height: 8),
 
                     DropdownButtonFormField<String>(
-                      value: selectedDoctor,
+                      value: doctors.contains(selectedDoctor)
+                          ? selectedDoctor
+                          : null,
 
                       decoration: InputDecoration(
                         prefixIcon: const Icon(
                           Icons.person_outline,
                           color: Color(0xFF3B82F6),
                         ),
-
                         border: OutlineInputBorder(
                           borderRadius:
                               BorderRadius.circular(10),
@@ -563,8 +691,9 @@ class _AppointmentDetailsScreenState
                             labelStyle: TextStyle(
                               color: selected
                                   ? Colors.white
-                                  : const Color(0xFF374151),
-
+                                  : const Color(
+                                      0xFF374151,
+                                    ),
                               fontWeight:
                                   FontWeight.w600,
                             ),
@@ -596,29 +725,38 @@ class _AppointmentDetailsScreenState
                       width: double.infinity,
 
                       child: ElevatedButton.icon(
-                        onPressed: _saveChanges,
+                        onPressed:
+                            isSaving ? null : _saveChanges,
 
-                        icon: const Icon(
-                          Icons.check,
-                        ),
+                        icon: isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.check,
+                              ),
 
-                        label: const Text(
-                          'Save Changes',
+                        label: Text(
+                          isSaving
+                              ? 'Saving...'
+                              : 'Save Changes',
                         ),
 
                         style:
                             ElevatedButton.styleFrom(
                           backgroundColor:
                               const Color(0xFF3B82F6),
-
-                          foregroundColor:
-                              Colors.white,
-
+                          foregroundColor: Colors.white,
                           padding:
                               const EdgeInsets.symmetric(
                             vertical: 15,
                           ),
-
                           shape:
                               RoundedRectangleBorder(
                             borderRadius:
@@ -663,7 +801,7 @@ class _AppointmentDetailsScreenState
             if (!isEditing)
               Row(
                 children: [
-                  // EDIT / RESCHEDULE
+                  // EDIT
 
                   Expanded(
                     child: ElevatedButton.icon(
@@ -686,15 +824,11 @@ class _AppointmentDetailsScreenState
                           ElevatedButton.styleFrom(
                         backgroundColor:
                             const Color(0xFF3B82F6),
-
-                        foregroundColor:
-                            Colors.white,
-
+                        foregroundColor: Colors.white,
                         padding:
                             const EdgeInsets.symmetric(
                           vertical: 15,
                         ),
-
                         shape:
                             RoundedRectangleBorder(
                           borderRadius:
@@ -732,12 +866,10 @@ class _AppointmentDetailsScreenState
                         side: const BorderSide(
                           color: Colors.red,
                         ),
-
                         padding:
                             const EdgeInsets.symmetric(
                           vertical: 15,
                         ),
-
                         shape:
                             RoundedRectangleBorder(
                           borderRadius:

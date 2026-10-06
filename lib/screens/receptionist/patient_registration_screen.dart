@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'patient_edit_screen.dart';
 
 class PatientRegistrationScreen extends StatefulWidget {
   const PatientRegistrationScreen({super.key});
@@ -22,6 +24,10 @@ class _PatientRegistrationScreenState
 
   String gender = 'Male';
   bool existingPatient = false;
+  bool isSaving = false;
+  bool isSearchingPatient = false;
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void dispose() {
@@ -40,11 +46,14 @@ class _PatientRegistrationScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF1F7FF),
 
+      // ============================================================
+      // APP BAR
+      // ============================================================
+
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 20,
-
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -52,7 +61,6 @@ class _PatientRegistrationScreenState
           ),
           onPressed: () => Navigator.pop(context),
         ),
-
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -75,18 +83,22 @@ class _PatientRegistrationScreenState
         ),
       ),
 
+      // ============================================================
+      // BODY
+      // ============================================================
+
       body: SafeArea(
         child: Form(
           key: _formKey,
-
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // ---------------- PERSONAL INFORMATION ----------------
+                // ============================================================
+                // PERSONAL INFORMATION
+                // ============================================================
 
                 _sectionTitle(
                   Icons.person_outline,
@@ -126,6 +138,8 @@ class _PatientRegistrationScreenState
                         hint: 'DD/MM/YYYY',
                         icon: Icons.calendar_today_outlined,
                         required: true,
+                        readOnly: true,
+                        onTap: _selectDateOfBirth,
                       ),
                     ),
                   ],
@@ -155,7 +169,9 @@ class _PatientRegistrationScreenState
 
                 const SizedBox(height: 22),
 
-                // ---------------- CONTACT INFORMATION ----------------
+                // ============================================================
+                // CONTACT INFORMATION
+                // ============================================================
 
                 _sectionTitle(
                   Icons.contact_phone_outlined,
@@ -202,7 +218,9 @@ class _PatientRegistrationScreenState
 
                 const SizedBox(height: 22),
 
-                // ---------------- PATIENT STATUS ----------------
+                // ============================================================
+                // PATIENT STATUS
+                // ============================================================
 
                 _sectionTitle(
                   Icons.people_outline,
@@ -214,7 +232,6 @@ class _PatientRegistrationScreenState
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(15),
-
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -222,53 +239,108 @@ class _PatientRegistrationScreenState
                       color: const Color(0xFFD6E4F5),
                     ),
                   ),
-
-                  child: Row(
+                  child: Column(
                     children: [
-                      const Text(
-                        'Existing Patient',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+
+                      Row(
+                        children: [
+                          const Text(
+                            'Existing Patient',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          Radio<bool>(
+                            value: true,
+                            groupValue: existingPatient,
+                            activeColor: const Color(0xFF3B82F6),
+                            onChanged: (value) {
+                              setState(() {
+                                existingPatient = value ?? false;
+                              });
+                            },
+                          ),
+
+                          const Text('Yes'),
+
+                          const SizedBox(width: 10),
+
+                          Radio<bool>(
+                            value: false,
+                            groupValue: existingPatient,
+                            activeColor: const Color(0xFF3B82F6),
+                            onChanged: (value) {
+                              setState(() {
+                                existingPatient = value ?? false;
+                              });
+                            },
+                          ),
+
+                          const Text('No'),
+                        ],
+                      ),
+
+                      // ========================================================
+                      // FIND & EDIT EXISTING PATIENT
+                      // ========================================================
+
+                      if (existingPatient) ...[
+                        const SizedBox(height: 10),
+
+                        const Divider(),
+
+                        const SizedBox(height: 8),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 46,
+                          child: OutlinedButton.icon(
+                            onPressed: isSearchingPatient
+                                ? null
+                                : _findAndEditPatient,
+                            icon: isSearchingPatient
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.edit_outlined,
+                                  ),
+                            label: Text(
+                              isSearchingPatient
+                                  ? 'Searching...'
+                                  : 'Find & Edit Existing Patient',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor:
+                                  const Color(0xFF2563EB),
+                              side: const BorderSide(
+                                color: Color(0xFF3B82F6),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-
-                      const Spacer(),
-
-                      Radio<bool>(
-                        value: true,
-                        groupValue: existingPatient,
-                        activeColor: const Color(0xFF3B82F6),
-                        onChanged: (value) {
-                          setState(() {
-                            existingPatient = value ?? false;
-                          });
-                        },
-                      ),
-
-                      const Text('Yes'),
-
-                      const SizedBox(width: 10),
-
-                      Radio<bool>(
-                        value: false,
-                        groupValue: existingPatient,
-                        activeColor: const Color(0xFF3B82F6),
-                        onChanged: (value) {
-                          setState(() {
-                            existingPatient = value ?? false;
-                          });
-                        },
-                      ),
-
-                      const Text('No'),
+                      ],
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 22),
 
-                // ---------------- ADDITIONAL NOTES ----------------
+                // ============================================================
+                // ADDITIONAL NOTES
+                // ============================================================
 
                 _sectionTitle(
                   Icons.notes_outlined,
@@ -287,37 +359,47 @@ class _PatientRegistrationScreenState
 
                 const SizedBox(height: 25),
 
-                // ---------------- BUTTONS ----------------
+                // ============================================================
+                // BUTTONS
+                // ============================================================
 
                 Row(
                   children: [
 
                     Expanded(
                       flex: 3,
-
                       child: SizedBox(
                         height: 52,
-
                         child: ElevatedButton(
-                          onPressed: _registerPatient,
-
+                          onPressed:
+                              isSaving ? null : _registerPatient,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B82F6),
+                            backgroundColor:
+                                const Color(0xFF3B82F6),
                             foregroundColor: Colors.white,
                             elevation: 2,
-
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius:
+                                  BorderRadius.circular(10),
                             ),
                           ),
-
-                          child: const Text(
-                            'Register Patient',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: isSaving
+                              ? const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child:
+                                      CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Register Patient',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -327,22 +409,20 @@ class _PatientRegistrationScreenState
                     Expanded(
                       child: SizedBox(
                         height: 52,
-
                         child: OutlinedButton(
-                          onPressed: _clearForm,
-
+                          onPressed:
+                              isSaving ? null : _clearForm,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF374151),
-
+                            foregroundColor:
+                                const Color(0xFF374151),
                             side: const BorderSide(
                               color: Color(0xFFD1D5DB),
                             ),
-
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius:
+                                  BorderRadius.circular(10),
                             ),
                           ),
-
                           child: const Text('Clear'),
                         ),
                       ),
@@ -400,21 +480,21 @@ class _PatientRegistrationScreenState
     required IconData icon,
     bool required = false,
     int maxLines = 1,
+    bool readOnly = false,
+    VoidCallback? onTap,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-
       children: [
+
         RichText(
           text: TextSpan(
             text: label,
-
             style: const TextStyle(
               color: Color(0xFF374151),
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
-
             children: required
                 ? const [
                     TextSpan(
@@ -433,10 +513,13 @@ class _PatientRegistrationScreenState
         TextFormField(
           controller: controller,
           maxLines: maxLines,
+          readOnly: readOnly,
+          onTap: onTap,
 
           validator: required
               ? (value) {
-                  if (value == null || value.trim().isEmpty) {
+                  if (value == null ||
+                      value.trim().isEmpty) {
                     return 'Required';
                   }
 
@@ -461,30 +544,31 @@ class _PatientRegistrationScreenState
             filled: true,
             fillColor: Colors.white,
 
-            contentPadding: const EdgeInsets.symmetric(
+            contentPadding:
+                const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 14,
             ),
 
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-
+              borderRadius:
+                  BorderRadius.circular(10),
               borderSide: const BorderSide(
                 color: Color(0xFFD6E4F5),
               ),
             ),
 
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-
+              borderRadius:
+                  BorderRadius.circular(10),
               borderSide: const BorderSide(
                 color: Color(0xFFD6E4F5),
               ),
             ),
 
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-
+              borderRadius:
+                  BorderRadius.circular(10),
               borderSide: const BorderSide(
                 color: Color(0xFF3B82F6),
                 width: 1.5,
@@ -503,14 +587,12 @@ class _PatientRegistrationScreenState
   Widget _genderOption(String value) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-
       children: [
+
         Radio<String>(
           value: value,
           groupValue: gender,
-
           activeColor: const Color(0xFF3B82F6),
-
           onChanged: (newValue) {
             setState(() {
               gender = newValue!;
@@ -529,59 +611,305 @@ class _PatientRegistrationScreenState
   }
 
   // ============================================================
-  // REGISTER PATIENT
+  // DATE OF BIRTH - CALENDAR
   // ============================================================
 
-  void _registerPatient() {
+  Future<void> _selectDateOfBirth() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+
+      initialDate: DateTime(2000),
+
+      firstDate: DateTime(1900),
+
+      lastDate: DateTime.now(),
+
+      helpText: 'Select Date of Birth',
+
+      cancelText: 'Cancel',
+
+      confirmText: 'Select',
+
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF3B82F6),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF1F2937),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null) {
+      final day =
+          pickedDate.day.toString().padLeft(2, '0');
+
+      final month =
+          pickedDate.month.toString().padLeft(2, '0');
+
+      final year =
+          pickedDate.year.toString();
+
+      setState(() {
+        dobController.text =
+            '$day/$month/$year';
+      });
+    }
+  }
+
+  // ============================================================
+  // FIND & EDIT EXISTING PATIENT
+  // ============================================================
+
+  Future<void> _findAndEditPatient() async {
+    final nic = nicController.text.trim();
+
+    if (nic.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter the patient NIC / Passport number first.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+
+      return;
+    }
+
+    setState(() {
+      isSearchingPatient = true;
+    });
+
+    try {
+      final result = await _firestore
+          .collection('patients')
+          .where(
+            'nic',
+            isEqualTo: nic,
+          )
+          .limit(1)
+          .get();
+
+      if (!mounted) return;
+
+      setState(() {
+        isSearchingPatient = false;
+      });
+
+      if (result.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No patient found with this NIC / Passport number.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        return;
+      }
+
+      final updated = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PatientEditScreen(
+            nic: nic,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (updated == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Patient details updated successfully.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        _clearForm();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSearchingPatient = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to find patient: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // REGISTER PATIENT - FIRESTORE
+  // ============================================================
+
+  Future<void> _registerPatient() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    showDialog(
-      context: context,
+    setState(() {
+      isSaving = true;
+    });
 
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    try {
+      // Check whether this NIC is already registered.
+      final existingPatientQuery = await _firestore
+          .collection('patients')
+          .where(
+            'nic',
+            isEqualTo: nicController.text.trim(),
+          )
+          .limit(1)
+          .get();
+
+      if (existingPatientQuery.docs.isNotEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A patient with this NIC / Passport number already exists.',
+            ),
+            backgroundColor: Colors.orange,
           ),
+        );
 
-          title: const Row(
-            children: [
-              Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 30,
-              ),
+        return;
+      }
 
-              SizedBox(width: 10),
+      // Create patient document.
+      await _firestore.collection('patients').add({
+        'fullName':
+            fullNameController.text.trim(),
 
-              Text('Success'),
-            ],
-          ),
+        'nic':
+            nicController.text.trim(),
 
-          content: Text(
-            '${fullNameController.text.trim()} has been registered successfully.',
-          ),
+        'dateOfBirth':
+            dobController.text.trim(),
 
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+        'gender':
+            gender,
 
-              child: const Text(
-                'OK',
-                style: TextStyle(
-                  color: Color(0xFF2563EB),
-                  fontWeight: FontWeight.bold,
+        'phone':
+            phoneController.text.trim(),
+
+        'email':
+            emailController.text.trim(),
+
+        'address':
+            addressController.text.trim(),
+
+        'existingPatient':
+            existingPatient,
+
+        'notes':
+            notesController.text.trim(),
+
+        'createdAt':
+            FieldValue.serverTimestamp(),
+
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      // ==========================================================
+      // SUCCESS DIALOG
+      // ==========================================================
+
+      await showDialog(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(16),
+            ),
+
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 30,
+                ),
+
+                SizedBox(width: 10),
+
+                Text('Success'),
+              ],
+            ),
+
+            content: Text(
+              '${fullNameController.text.trim()} has been registered successfully.',
+            ),
+
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+
+                child: const Text(
+                  'OK',
+                  style: TextStyle(
+                    color: Color(0xFF2563EB),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
-    );
+            ],
+          );
+        },
+      );
+
+      // Clear form after successful registration.
+      _clearForm();
+
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to register patient: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // ============================================================
