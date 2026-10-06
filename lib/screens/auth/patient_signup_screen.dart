@@ -285,8 +285,8 @@ class _SignUpBrandHeader extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Container(
-        width: 52,
-        height: 52,
+        width: 70,
+        height: 70,
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(17),
@@ -298,10 +298,12 @@ class _SignUpBrandHeader extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(
-          Icons.add_rounded,
-          color: AppColors.primary,
-          size: 34,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(17),
+          child: Image.asset(
+            'assets/medihelp_logo.png',
+            fit: BoxFit.cover,
+          ),
         ),
       ),
       const SizedBox(width: 13),
@@ -309,7 +311,7 @@ class _SignUpBrandHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'MediQueue',
+            'MediHelp',
             style: TextStyle(
               color: AppColors.onPrimary,
               fontSize: 21,
