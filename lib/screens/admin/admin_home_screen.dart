@@ -16,12 +16,13 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   int _selectedIndex = 0;
-  final _store = AdminDemoStore.instance;
+  final _store = AdminDataStore.instance;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_refresh);
+    _store.start();
   }
 
   void _refresh() {
@@ -31,6 +32,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   @override
   void dispose() {
     _store.removeListener(_refresh);
+    _store.stop();
     super.dispose();
   }
 
@@ -56,6 +58,28 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Widget _buildDashboard() {
+    if (_store.error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_store.error!),
+            ),
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _store.start();
+                });
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_store.loading) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -64,9 +88,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Demo mode • Appointment and queue sample datasets are separate.',
-        ),
+        const Text('Live appointments and queues • Totals across all dates'),
         const SizedBox(height: 20),
         GridView.count(
           crossAxisCount: 2,
@@ -121,7 +143,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const Text('In queue includes Waiting and Called patients.'),
-        for (final department in ['OPD', 'Dental', 'Paediatrics'])
+        if (_store.departments.isEmpty) const Text('No departments yet.'),
+        for (final department in _store.departments)
           Card(
             child: ListTile(
               title: Text(department),
@@ -137,9 +160,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           'Recent Activity',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
+        const Text('Actions performed in this Admin session only.'),
+        if (_store.activity.isEmpty)
+          const Text('No actions in this session yet.'),
         for (final message in _store.activity.take(5))
           ListTile(leading: const Icon(Icons.history), title: Text(message)),
         const SizedBox(height: 24),
+        if (_store.skippedAppointments + _store.skippedQueues > 0)
+          Text(
+            '${_store.skippedAppointments} appointments and ${_store.skippedQueues} queue entries could not be linked or have missing fields. Ask the team to review older records.',
+          ),
         const Text(
           'Quick Access',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),

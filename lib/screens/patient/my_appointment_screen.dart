@@ -18,6 +18,7 @@ class MyAppointmentScreen extends StatefulWidget {
 }
 
 class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
+  bool _cancelling = false;
   void _showActions(BuildContext context) {
     final appointment = AppointmentStore.current ?? DummyData.appointment;
     showModalBottomSheet<void>(
@@ -79,16 +80,31 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
           ),
           FilledButton(
             onPressed: () async {
-              await QueueService().remove(appointment.number);
-              AppointmentStore.cancel();
-              if (!mounted || !context.mounted) return;
-              Navigator.pop(context);
-              setState(() {});
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                const SnackBar(
-                  content: Text('Appointment cancelled successfully.'),
-                ),
-              );
+              if (_cancelling) return;
+              _cancelling = true;
+              try {
+                await QueueService().remove(appointment.number);
+                AppointmentStore.cancel();
+                if (!mounted || !context.mounted) return;
+                Navigator.pop(context);
+                setState(() {});
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Appointment cancelled successfully.'),
+                  ),
+                );
+              } catch (error) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      error is StateError ? error.message.toString() : 'Could not cancel. Check your connection and try again.',
+                    ),
+                  ),
+                );
+              } finally {
+                _cancelling = false;
+              }
             },
             child: const Text('Cancel appointment'),
           ),

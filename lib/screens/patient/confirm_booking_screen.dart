@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/routes.dart';
 import '../../core/theme.dart';
@@ -33,6 +32,9 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
   final _nicController = TextEditingController();
   final _contactController = TextEditingController();
   final _emailController = TextEditingController();
+  final _queueService = QueueService();
+  bool _saving = false;
+  String? _newNumber;
 
   @override
   void initState() {
@@ -56,11 +58,14 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
   }
 
   Future<void> _confirm() async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
     final oldAppointment = widget.existingAppointment;
     final appointment = Appointment(
-      number: oldAppointment?.number ??
-          'OPD${widget.date.year}${widget.date.month.toString().padLeft(2, '0')}${widget.date.day.toString().padLeft(2, '0')}-001',
+      number:
+          oldAppointment?.number ??
+          (_newNumber ??= _queueService.newAppointmentNumber()),
       doctor: widget.doctor,
       date: widget.date,
       dateLabel: '${widget.date.day}/${widget.date.month}/${widget.date.year}',
@@ -72,20 +77,21 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
       email: _emailController.text,
     );
     try {
-      if (oldAppointment != null) {
-        await QueueService().remove(oldAppointment.number);
-      }
-      await QueueService().createInitial(appointment.number);
+      await _queueService.saveBooking(appointment);
       AppointmentStore.current = appointment;
-    } on FirebaseException {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not create the live queue. Please try again.'),
+          SnackBar(
+            content: Text(
+              error is StateError ? error.message.toString() : 'Could not save the appointment. Check your connection and permissions, then try again.',
+            ),
           ),
         );
       }
       return;
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
     if (!mounted) return;
     Navigator.pushReplacementNamed(
@@ -173,15 +179,15 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _saving ? null : () => Navigator.pop(context),
                     child: const Text('Edit'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: PrimaryButton(
-                    label: 'Confirm Booking',
-                    onPressed: _confirm,
+                    label: _saving ? 'Saving...' : 'Confirm Booking',
+                    onPressed: _saving ? null : _confirm,
                   ),
                 ),
               ],
