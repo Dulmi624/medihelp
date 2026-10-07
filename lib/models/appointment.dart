@@ -7,10 +7,12 @@ class Appointment {
     required this.date,
     required this.time,
     required this.location,
+    this.dateLabel = '',
     this.patientName = '',
     this.nic = '',
     this.contactNumber = '',
     this.email = '',
+    this.isCancelled = false,
   });
 
   final String number;
@@ -18,16 +20,19 @@ class Appointment {
   final DateTime date;
   final String time;
   final String location;
+  final String dateLabel;
   final String patientName;
   final String nic;
   final String contactNumber;
   final String email;
+  final bool isCancelled;
 
   Appointment copyWith({
     String? patientName,
     String? nic,
     String? contactNumber,
     String? email,
+    bool? isCancelled,
   }) {
     return Appointment(
       number: number,
@@ -35,10 +40,12 @@ class Appointment {
       date: date,
       time: time,
       location: location,
+      dateLabel: dateLabel,
       patientName: patientName ?? this.patientName,
       nic: nic ?? this.nic,
       contactNumber: contactNumber ?? this.contactNumber,
       email: email ?? this.email,
+      isCancelled: isCancelled ?? this.isCancelled,
     );
   }
 }

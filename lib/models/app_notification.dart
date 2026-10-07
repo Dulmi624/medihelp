@@ -14,4 +14,12 @@ class AppNotification {
   final String time;
   final NotificationType type;
   final bool isRead;
+
+  AppNotification copyWith({bool? isRead}) => AppNotification(
+        title: title,
+        message: message,
+        time: time,
+        type: type,
+        isRead: isRead ?? this.isRead,
+      );
 }
