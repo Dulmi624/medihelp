@@ -2,15 +2,81 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.role == 'admin';
+    }
+
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || isAdmin());
+
       allow create: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.role == 'patient';
+
       allow update: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.role == resource.data.role;
+
       allow delete: if false;
+    }
+
+    match /admin_reports/{reportId} {
+      function validReport() {
+        let d = request.resource.data;
+
+        return d.keys().hasAll([
+            'title', 'type', 'driveLink',
+            'periodStart', 'periodEnd',
+            'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && d.keys().hasOnly([
+            'title', 'type', 'driveLink',
+            'periodStart', 'periodEnd',
+            'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && d.title is string
+          && d.title.size() > 0
+          && d.title.size() <= 120
+          && d.type in [
+            'Appointment', 'Queue / Waiting Time',
+            'Department', 'Patient', 'Other'
+          ]
+          && d.driveLink is string
+          && d.driveLink.size() <= 2048
+          && d.driveLink.matches(
+            'https://(drive[.]google[.]com/(file/d/.*|open[?].*)|docs[.]google[.]com/document/d/.*)'
+          )
+          && d.periodStart is timestamp
+          && d.periodEnd is timestamp
+          && d.periodStart <= d.periodEnd
+          && d.createdBy is string
+          && d.createdAt is timestamp
+          && d.updatedAt == request.time;
+      }
+
+      allow read, delete: if isAdmin();
+
+      allow create: if isAdmin()
+        && validReport()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin()
+        && validReport()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // Preserve existing temporary access for other collections.
+    match /{collection}/{document=**} {
+      allow read, write: if collection != 'admin_reports'
+        && collection != 'users'
+        && request.time < timestamp.date(2026, 10, 31);
     }
   }
 }
