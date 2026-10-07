@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import 'appointment_details_screen.dart';
 import 'walk_in_appointment_screen.dart';
+import 'patient_registration_screen.dart';
+import 'receptionist_queue_screen.dart';
 
 class AppointmentManagementScreen extends StatefulWidget {
   const AppointmentManagementScreen({super.key});
@@ -448,70 +450,31 @@ class _AppointmentManagementScreenState
           .collection('queues')
           .doc(queueNumber)
           .set({
-        'queueNumber':
-            queueNumber,
-
-        'appointmentId':
-            appointmentId,
-
+        'queueNumber': queueNumber,
+        'appointmentId': appointmentId,
         'appointmentNumber':
             appointment['appointmentNumber'] ?? '',
-
-        'patientId':
-            appointment['patientId'] ?? '',
-
-        'patientName':
-            appointment['patient'] ?? '',
-
-        'nic':
-            appointment['nic'] ?? '',
-
-        'doctorId':
-            appointment['doctorId'] ?? '',
-
-        'doctorName':
-            appointment['doctor'] ?? '',
-
-        'department':
-            appointment['department'] ?? '',
-
+        'patientId': appointment['patientId'] ?? '',
+        'patientName': appointment['patient'] ?? '',
+        'nic': appointment['nic'] ?? '',
+        'doctorId': appointment['doctorId'] ?? '',
+        'doctorName': appointment['doctor'] ?? '',
+        'department': appointment['department'] ?? '',
         'clinic':
             appointment['clinic'] ??
                 appointment['department'] ??
                 '',
-
-        'date':
-            appointmentDate,
-
-        'appointmentTime':
-            appointmentTime,
-
-        'time':
-            appointmentTime,
-
-        'status':
-            'waiting',
-
-        'currentServing':
-            0,
-
-        'peopleAhead':
-            existingQueues.docs.length,
-
-        'totalInQueue':
-            existingQueues.docs.length + 1,
-
-        'estimatedMinutes':
-            existingQueues.docs.length * 10,
-
-        'notes':
-            '',
-
-        'createdAt':
-            FieldValue.serverTimestamp(),
-
-        'updatedAt':
-            FieldValue.serverTimestamp(),
+        'date': appointmentDate,
+        'appointmentTime': appointmentTime,
+        'time': appointmentTime,
+        'status': 'waiting',
+        'currentServing': 0,
+        'peopleAhead': existingQueues.docs.length,
+        'totalInQueue': existingQueues.docs.length + 1,
+        'estimatedMinutes': existingQueues.docs.length * 10,
+        'notes': '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       // ----------------------------------------------------------
@@ -522,14 +485,9 @@ class _AppointmentManagementScreenState
           .collection('appointments')
           .doc(appointmentId)
           .update({
-        'status':
-            'checked_in',
-
-        'queueNumber':
-            queueNumber,
-
-        'updatedAt':
-            FieldValue.serverTimestamp(),
+        'status': 'checked_in',
+        'queueNumber': queueNumber,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       // ----------------------------------------------------------
@@ -547,8 +505,7 @@ class _AppointmentManagementScreenState
             'Queue No: $queueNumber',
           ),
           backgroundColor: Colors.green,
-          duration:
-              const Duration(seconds: 4),
+          duration: const Duration(seconds: 4),
         ),
       );
     } catch (e) {
@@ -585,8 +542,7 @@ class _AppointmentManagementScreenState
 
     return '$year$month$day';
   }
-
-  // ============================================================
+    // ============================================================
   // BUILD
   // ============================================================
 
@@ -698,6 +654,91 @@ class _AppointmentManagementScreenState
           return buildBody(
             appointments,
           );
+        },
+      ),
+
+      // ==========================================================
+      // BOTTOM NAVIGATION BAR
+      // ==========================================================
+
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 1,
+        selectedItemColor: const Color(0xFF3B82F6),
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        showUnselectedLabels: true,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_month_outlined),
+            activeIcon: Icon(Icons.calendar_month),
+            label: 'Appointments',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_outline),
+            activeIcon: Icon(Icons.people),
+            label: 'Queue',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu),
+            label: 'More',
+          ),
+        ],
+
+        onTap: (index) {
+          if (index == 0) {
+            Navigator.pop(context);
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const ReceptionistQueueScreen(),
+              ),
+            );
+          } else if (index == 3) {
+            showModalBottomSheet<void>(
+              context: context,
+              builder: (sheetContext) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: const Icon(
+                        Icons.person_add_alt_1,
+                        color: Color(0xFF3B82F6),
+                      ),
+                      title: const Text('Register Patient'),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const PatientRegistrationScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.close),
+                      title: const Text('Close'),
+                      onTap: () =>
+                          Navigator.pop(sheetContext),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
         },
       ),
     );
@@ -824,6 +865,20 @@ class _AppointmentManagementScreenState
                     const BorderSide(
                   color:
                       Color(0xFFD6E4F5),
+                ),
+              ),
+
+              focusedBorder:
+                  OutlineInputBorder(
+                borderRadius:
+                    BorderRadius.circular(
+                  10,
+                ),
+                borderSide:
+                    const BorderSide(
+                  color:
+                      Color(0xFF3B82F6),
+                  width: 1.5,
                 ),
               ),
             ),
@@ -982,8 +1037,7 @@ class _AppointmentManagementScreenState
       ),
     );
   }
-
-  // ============================================================
+    // ============================================================
   // FILTER BUTTON
   // ============================================================
 
@@ -1107,9 +1161,7 @@ class _AppointmentManagementScreenState
                 decoration:
                     BoxDecoration(
                   color:
-                      const Color(
-                    0xFFEAF2FF,
-                  ),
+                      const Color(0xFFEAF2FF),
 
                   borderRadius:
                       BorderRadius

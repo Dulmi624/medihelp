@@ -9,22 +9,89 @@ import 'receptionist_queue_screen.dart';
 class ReceptionistHomeScreen extends StatelessWidget {
   const ReceptionistHomeScreen({super.key});
 
+  static const Color primaryBlue = Color(0xFF3B82F6);
+  static const Color darkBlue = Color(0xFF1D4ED8);
+  static const Color backgroundBlue = Color(0xFFF1F7FF);
+
+  void _openPage(BuildContext context, int index) {
+    if (index == 0) return;
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AppointmentManagementScreen(),
+        ),
+      );
+    } else if (index == 2) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ReceptionistQueueScreen(),
+        ),
+      );
+    } else if (index == 3) {
+      showModalBottomSheet(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.person_add_alt_1,
+                  color: primaryBlue,
+                ),
+                title: const Text('Register Patient'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const PatientRegistrationScreen(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.person_search_outlined,
+                  color: primaryBlue,
+                ),
+                title: const Text('Find & Edit Patient'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const PatientRegistrationScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F7FF),
-
+      backgroundColor: backgroundBlue,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 20,
-
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6),
+                color: primaryBlue,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
@@ -33,9 +100,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
                 size: 22,
               ),
             ),
-
             const SizedBox(width: 10),
-
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -58,7 +123,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
             ),
           ],
         ),
-
         actions: [
           IconButton(
             tooltip: 'Log out',
@@ -75,27 +139,21 @@ class ReceptionistHomeScreen extends StatelessWidget {
             },
             icon: const Icon(Icons.logout),
           ),
-
           const SizedBox(width: 10),
         ],
       ),
 
+      // DASHBOARD CONTENT
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
-
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-
             children: [
-              // =====================================================
-              // WELCOME
-              // =====================================================
-
+              // WELCOME CARD
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
-
                 decoration: BoxDecoration(
                   color: const Color(0xFFE7F1FF),
                   borderRadius: BorderRadius.circular(16),
@@ -103,7 +161,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
                     color: const Color(0xFFBFDBFE),
                   ),
                 ),
-
                 child: Row(
                   children: [
                     const Expanded(
@@ -115,12 +172,10 @@ class ReceptionistHomeScreen extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1D4ED8),
+                              color: darkBlue,
                             ),
                           ),
-
                           SizedBox(height: 6),
-
                           Text(
                             "Here's today's overview.",
                             style: TextStyle(
@@ -131,10 +186,8 @@ class ReceptionistHomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     Container(
                       padding: const EdgeInsets.all(12),
-
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -142,10 +195,9 @@ class ReceptionistHomeScreen extends StatelessWidget {
                           color: const Color(0xFFBFDBFE),
                         ),
                       ),
-
                       child: const Icon(
                         Icons.person_outline,
-                        color: Color(0xFF3B82F6),
+                        color: primaryBlue,
                       ),
                     ),
                   ],
@@ -154,53 +206,41 @@ class ReceptionistHomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // =====================================================
-              // DATE
-              // =====================================================
-
+              // DATE CARD
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 15,
                   vertical: 13,
                 ),
-
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
-
                 child: const Row(
                   children: [
                     Icon(
                       Icons.calendar_today_outlined,
                       size: 18,
-                      color: Color(0xFF3B82F6),
+                      color: primaryBlue,
                     ),
-
                     SizedBox(width: 10),
-
-                    Text(
-                      'Today, 02 October 2026',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        'Today, 02 October 2026',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-
-                    Spacer(),
-
                     Icon(
                       Icons.location_on_outlined,
                       size: 18,
                       color: Colors.grey,
                     ),
-
                     SizedBox(width: 5),
-
                     Text(
                       'OPD 1',
-                      style: TextStyle(
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(color: Colors.grey),
                     ),
                   ],
                 ),
@@ -208,10 +248,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // =====================================================
               // STATISTICS
-              // =====================================================
-
               Row(
                 children: [
                   Expanded(
@@ -222,9 +259,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
                       iconColor: Colors.blue,
                     ),
                   ),
-
                   const SizedBox(width: 10),
-
                   Expanded(
                     child: _statCard(
                       icon: Icons.access_time,
@@ -233,9 +268,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
                       iconColor: Colors.orange,
                     ),
                   ),
-
                   const SizedBox(width: 10),
-
                   Expanded(
                     child: _statCard(
                       icon: Icons.check_circle_outline,
@@ -249,24 +282,16 @@ class ReceptionistHomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // =====================================================
-              // QUICK ACTIONS
-              // =====================================================
-
               const Text(
                 'Quick Actions',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1D4ED8),
+                  color: darkBlue,
                 ),
               ),
 
               const SizedBox(height: 12),
-
-              // =====================================================
-              // REGISTER PATIENT
-              // =====================================================
 
               _actionCard(
                 context,
@@ -286,10 +311,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              // =====================================================
-              // MANAGE APPOINTMENTS
-              // =====================================================
-
               _actionCard(
                 context,
                 icon: Icons.calendar_month_outlined,
@@ -308,16 +329,11 @@ class ReceptionistHomeScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              // =====================================================
-              // MANAGE QUEUE
-              // =====================================================
-
               _actionCard(
                 context,
                 icon: Icons.people_outline,
                 title: 'Manage Queue',
-                subtitle:
-                    'Manage patient queue and waiting status',
+                subtitle: 'Manage patient queue and waiting status',
                 onTap: () {
                   Navigator.push(
                     context,
@@ -331,30 +347,30 @@ class ReceptionistHomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // =====================================================
               // TODAY'S APPOINTMENTS
-              // =====================================================
-
               Row(
                 mainAxisAlignment:
                     MainAxisAlignment.spaceBetween,
-
                 children: [
                   const Text(
                     "Today's Appointments",
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1D4ED8),
+                      color: darkBlue,
                     ),
                   ),
-
-                  Text(
-                    'View All',
-                    style: TextStyle(
-                      color: Colors.blue.shade600,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const AppointmentManagementScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('View All'),
                   ),
                 ],
               ),
@@ -368,7 +384,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
                 'Waiting',
                 Colors.orange,
               ),
-
               _appointmentCard(
                 '09:00',
                 'Malini Silva',
@@ -376,7 +391,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
                 'Scheduled',
                 Colors.blue,
               ),
-
               _appointmentCard(
                 '09:30',
                 'Kasun Rajapaksa',
@@ -384,7 +398,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
                 'Completed',
                 Colors.green,
               ),
-
               _appointmentCard(
                 '10:00',
                 'Thilini G.',
@@ -396,13 +409,42 @@ class ReceptionistHomeScreen extends StatelessWidget {
           ),
         ),
       ),
+
+      // BOTTOM NAVIGATION BAR
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 0,
+        backgroundColor: Colors.white,
+        selectedItemColor: primaryBlue,
+        unselectedItemColor: Colors.grey,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        showUnselectedLabels: true,
+        onTap: (index) => _openPage(context, index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_month_outlined),
+            label: 'Appointments',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_outline),
+            label: 'Queue',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu),
+            label: 'More',
+          ),
+        ],
+      ),
     );
   }
 
-  // ===============================================================
   // STAT CARD
-  // ===============================================================
-
   Widget _statCard({
     required IconData icon,
     required String number,
@@ -414,22 +456,14 @@ class ReceptionistHomeScreen extends StatelessWidget {
         vertical: 16,
         horizontal: 8,
       ),
-
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: iconColor,
-            size: 22,
-          ),
-
+          Icon(icon, color: iconColor, size: 22),
           const SizedBox(height: 8),
-
           Text(
             number,
             style: const TextStyle(
@@ -437,9 +471,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 3),
-
           Text(
             label,
             textAlign: TextAlign.center,
@@ -453,10 +485,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
     );
   }
 
-  // ===============================================================
   // ACTION CARD
-  // ===============================================================
-
   Widget _actionCard(
     BuildContext context, {
     required IconData icon,
@@ -467,38 +496,26 @@ class ReceptionistHomeScreen extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
-
       child: Container(
         padding: const EdgeInsets.all(15),
-
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
         ),
-
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-
               decoration: BoxDecoration(
                 color: const Color(0xFFE7F1FF),
                 borderRadius: BorderRadius.circular(10),
               ),
-
-              child: Icon(
-                icon,
-                color: const Color(0xFF3B82F6),
-              ),
+              child: Icon(icon, color: primaryBlue),
             ),
-
             const SizedBox(width: 14),
-
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -507,9 +524,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
                       fontSize: 15,
                     ),
                   ),
-
                   const SizedBox(height: 3),
-
                   Text(
                     subtitle,
                     style: const TextStyle(
@@ -520,7 +535,6 @@ class ReceptionistHomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-
             const Icon(
               Icons.chevron_right,
               color: Colors.grey,
@@ -531,10 +545,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
     );
   }
 
-  // ===============================================================
   // APPOINTMENT CARD
-  // ===============================================================
-
   Widget _appointmentCard(
     String time,
     String patient,
@@ -544,19 +555,15 @@ class ReceptionistHomeScreen extends StatelessWidget {
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-
       padding: const EdgeInsets.all(14),
-
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-
       child: Row(
         children: [
           SizedBox(
             width: 55,
-
             child: Text(
               time,
               style: const TextStyle(
@@ -565,12 +572,9 @@ class ReceptionistHomeScreen extends StatelessWidget {
               ),
             ),
           ),
-
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   patient,
@@ -578,9 +582,7 @@ class ReceptionistHomeScreen extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-
                 const SizedBox(height: 3),
-
                 Text(
                   doctor,
                   style: const TextStyle(
@@ -591,18 +593,15 @@ class ReceptionistHomeScreen extends StatelessWidget {
               ],
             ),
           ),
-
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 10,
               vertical: 5,
             ),
-
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-
             child: Text(
               status,
               style: TextStyle(
