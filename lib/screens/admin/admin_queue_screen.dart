@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import 'admin_demo_store.dart';
 
 class AdminQueueScreen extends StatefulWidget {
@@ -10,13 +11,15 @@ class AdminQueueScreen extends StatefulWidget {
 }
 
 class _AdminQueueScreenState extends State<AdminQueueScreen> {
-  static const _departments = ['OPD', 'Dental', 'Paediatrics'];
+  List<String> get _departments => _store.departments;
+  bool _calling = false;
+  final Set<String> _saving = {};
 
   String _department = 'All';
   bool _showFlow = false;
   late DateTime _selectedDate;
-  final _store = AdminDemoStore.instance;
-  List<DemoQueuePatient> get _patients => _store.patients;
+  final _store = AdminDataStore.instance;
+  List<AdminQueuePatient> get _patients => _store.patients;
 
   @override
   void initState() {
@@ -29,7 +32,13 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        if (_department != 'All' && !_departments.contains(_department)) {
+          _department = 'All';
+        }
+      });
+    }
   }
 
   @override
@@ -43,26 +52,27 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
   bool _sameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  List<DemoQueuePatient> get _dayPatients =>
+  List<AdminQueuePatient> get _dayPatients =>
       _patients.where((p) => _sameDate(p.date, _selectedDate)).toList();
 
-  List<DemoQueuePatient> get _visible => _dayPatients
+  List<AdminQueuePatient> get _visible => _dayPatients
       .where((p) => _department == 'All' || p.department == _department)
       .toList();
 
-  int _count(List<DemoQueuePatient> patients, String status) =>
+  int _count(List<AdminQueuePatient> patients, String status) =>
       patients.where((p) => p.status == status).length;
 
-  double? _averageWait(List<DemoQueuePatient> patients) {
+  double? _averageWait(List<AdminQueuePatient> patients) {
     final waiting = patients.where((p) => p.status == 'Waiting').toList();
-
-    if (waiting.isEmpty) return null;
+    if (waiting.isEmpty || waiting.any((p) => !p.estimateConfirmed)) {
+      return null;
+    }
 
     return waiting.fold<int>(0, (sum, p) => sum + p.waitMinutes) /
         waiting.length;
   }
 
-  bool _isInQueue(DemoQueuePatient patient) =>
+  bool _isInQueue(AdminQueuePatient patient) =>
       patient.status == 'Waiting' || patient.status == 'Called';
 
   Future<void> _selectDate() async {
@@ -78,10 +88,11 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
   }
 
   Future<void> _callNext() async {
+    if (_calling) return;
     final waiting = _visible.where((p) => p.status == 'Waiting').toList();
     if (waiting.isEmpty) return;
 
-    waiting.sort((a, b) => a.number.compareTo(b.number));
+    waiting.sort(AdminDataStore.compareQueue);
     final next = waiting.first;
 
     final confirmed = await showDialog<bool>(
@@ -91,7 +102,7 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
         content: Text(
           '${next.number} • ${next.name}\n'
           '${next.department}\n\n'
-          'Demo action only. Firebase will not be updated.',
+          'Call this patient? Order is based on booking creation time.',
         ),
         actions: [
           TextButton(
@@ -108,11 +119,44 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
 
     if (!mounted || confirmed != true) return;
 
-    _store.callPatient(next);
+    if (_calling || !mounted) return;
+    setState(() => _calling = true);
+    try {
+      await _store.callPatient(next);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${next.name} called.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AdminDataStore.messageFor(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _calling = false);
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${next.number} called — demo only')),
-    );
+  Future<void> _advance(AdminQueuePatient patient, String status) async {
+    if (_saving.contains(patient.id)) return;
+    setState(() => _saving.add(patient.id));
+    try {
+      await _store.changeQueueStatus(patient, status);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Queue status saved: $status')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AdminDataStore.messageFor(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving.remove(patient.id));
+    }
   }
 
   Widget _summary(String title, String value, IconData icon) {
@@ -135,7 +179,7 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
     );
   }
 
-  Widget _queueList(List<DemoQueuePatient> patients) {
+  Widget _queueList(List<AdminQueuePatient> patients) {
     if (patients.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(24),
@@ -148,14 +192,36 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
         for (final patient in patients)
           Card(
             child: ListTile(
-              leading: CircleAvatar(child: Text(patient.number.substring(1))),
+              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
               title: Text(patient.name),
               subtitle: Text(
                 '${patient.department} • ${patient.number}\n'
                 '${patient.status}'
-                '${patient.status == 'Waiting' ? ' • ${patient.waitMinutes} min elapsed' : ''}',
+                '${patient.status == 'Waiting' ? (patient.estimateConfirmed ? ' • ${patient.waitMinutes} min estimated' : ' • Estimate not available') : ''}',
               ),
               isThreeLine: true,
+              trailing:
+                  patient.status == 'Called' ||
+                      patient.status == 'In Consultation'
+                  ? IconButton(
+                      tooltip: patient.status == 'Called'
+                          ? 'Start consultation'
+                          : 'Complete consultation',
+                      onPressed: _saving.contains(patient.id)
+                          ? null
+                          : () => _advance(
+                              patient,
+                              patient.status == 'Called'
+                                  ? 'In Consultation'
+                                  : 'Completed',
+                            ),
+                      icon: Icon(
+                        patient.status == 'Called'
+                            ? Icons.medical_services_outlined
+                            : Icons.check_circle_outline,
+                      ),
+                    )
+                  : null,
             ),
           ),
       ],
@@ -225,8 +291,8 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
                 const SizedBox(height: 8),
                 Text(
                   maxWait == null
-                      ? 'Highest average elapsed wait: No waiting patients'
-                      : 'Highest average elapsed wait: '
+                      ? 'Highest average estimated wait: Not available'
+                      : 'Highest average estimated wait: '
                             '$longestWaits (${maxWait.round()} min)',
                 ),
               ],
@@ -241,16 +307,16 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
           ),
         const SizedBox(height: 8),
         const Text(
-          'Elapsed wait is time already spent waiting, '
-          'not an estimate of time remaining. '
-          'Demo minutes are fixed sample values.',
+          'Estimates use 10 minutes per person ahead and update while an Admin is online. '
+          'Estimates are shown only when calculated for all waiting patients. '
+          'Call Next uses booking creation order, not a hospital-issued queue number.',
           style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
       ],
     );
   }
 
-  Widget _departmentCard(String department, List<DemoQueuePatient> patients) {
+  Widget _departmentCard(String department, List<AdminQueuePatient> patients) {
     final average = _averageWait(patients);
 
     return Card(
@@ -284,8 +350,8 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
             const SizedBox(height: 8),
             Text(
               average == null
-                  ? 'Average elapsed wait: No waiting patients'
-                  : 'Average elapsed wait: ${average.round()} min',
+                  ? 'Average estimated wait: Not available'
+                  : 'Average estimated wait: ${average.round()} min',
             ),
           ],
         ),
@@ -295,106 +361,133 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_store.error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(_store.error!),
+        ),
+      );
+    }
+    if (_store.loading) return const Center(child: CircularProgressIndicator());
     final visible = _visible;
     final waitingCount = _count(visible, 'Waiting');
     final average = _averageWait(visible);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Queue Monitoring',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Demo mode • Sample data • Temporary changes',
-          style: TextStyle(color: Colors.grey),
-        ),
-        const SizedBox(height: 16),
-        DropdownButtonFormField<String>(
-          initialValue: _department,
-          decoration: const InputDecoration(
-            labelText: 'Department',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            for (final department in ['All', ..._departments])
-              DropdownMenuItem(value: department, child: Text(department)),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              setState(() => _department = value);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.calendar_month),
-            title: const Text('Selected Date'),
-            subtitle: Text(_dateLabel(_selectedDate)),
-            trailing: const Icon(Icons.edit_outlined),
-            onTap: _selectDate,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          children: [
-            ChoiceChip(
-              label: const Text('Queue'),
-              selected: !_showFlow,
-              onSelected: (_) => setState(() => _showFlow = false),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+        children: [
+          const Text(
+            'Queue Monitoring',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
             ),
-            ChoiceChip(
-              label: const Text('Patient Flow / Waiting Times'),
-              selected: _showFlow,
-              onSelected: (_) => setState(() => _showFlow = true),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Live Firestore queue • Choose the appointment date',
+            style: TextStyle(color: Colors.grey),
+          ),
+          if (_store.metricsError != null)
+            Text(
+              'Queue calculation: ${_store.metricsError}',
+              style: const TextStyle(color: Colors.red),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_showFlow)
-          _flowView()
-        else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            key: ValueKey(_department),
+            initialValue: _department,
+            decoration: const InputDecoration(
+              labelText: 'Department',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final department in ['All', ..._departments])
+                DropdownMenuItem(value: department, child: Text(department)),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _department = value);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.calendar_month),
+              title: const Text('Selected Date'),
+              subtitle: Text(_dateLabel(_selectedDate)),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: _selectDate,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
             children: [
-              Expanded(
-                child: _summary(
-                  'Waiting',
-                  '$waitingCount',
-                  Icons.people_outline,
-                ),
+              ChoiceChip(
+                label: const Text('Queue'),
+                selected: !_showFlow,
+                onSelected: (_) => setState(() => _showFlow = false),
               ),
-              Expanded(
-                child: _summary(
-                  'Avg. elapsed wait',
-                  average == null ? '—' : '${average.round()}m',
-                  Icons.schedule,
-                ),
-              ),
-              Expanded(
-                child: _summary(
-                  'In consultation',
-                  '${_count(visible, 'In Consultation')}',
-                  Icons.medical_services_outlined,
-                ),
+              ChoiceChip(
+                label: const Text('Patient Flow / Waiting Times'),
+                selected: _showFlow,
+                onSelected: (_) => setState(() => _showFlow = true),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _queueList(visible),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: waitingCount == 0 ? null : _callNext,
-            icon: const Icon(Icons.campaign_outlined),
-            label: const Text('Call Next Patient'),
-          ),
+          if (_showFlow)
+            _flowView()
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _summary(
+                    'Waiting',
+                    '$waitingCount',
+                    Icons.people_outline,
+                  ),
+                ),
+                Expanded(
+                  child: _summary(
+                    'Avg. estimated wait',
+                    average == null ? '—' : '${average.round()}m',
+                    Icons.schedule,
+                  ),
+                ),
+                Expanded(
+                  child: _summary(
+                    'In consultation',
+                    '${_count(visible, 'In Consultation')}',
+                    Icons.medical_services_outlined,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _queueList(visible),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed:
+                  waitingCount == 0 ||
+                      _calling ||
+                      !_sameDate(_selectedDate, DateTime.now())
+                  ? null
+                  : _callNext,
+              icon: const Icon(Icons.campaign_outlined),
+              label: Text(_calling ? 'Saving...' : 'Call Next Patient'),
+            ),
+          ],
+          const SizedBox(height: 24),
         ],
-        const SizedBox(height: 24),
-      ],
+      ),
     );
   }
 }

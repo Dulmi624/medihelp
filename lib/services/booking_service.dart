@@ -259,4 +259,191 @@ class BookingService {
       });
     });
   }
+
+  Future<Appointment> rescheduleBooking({
+    required Appointment existing,
+    required DateTime date,
+    required String time,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Please sign in before rescheduling.');
+    }
+
+    final selectedDate = DateTime(date.year, date.month, date.day);
+    final selectedTime = time.trim().toUpperCase();
+
+    final match = RegExp(r'^(0[1-9]|1[0-2]):([0-5][0-9]) (AM|PM)$')
+        .firstMatch(selectedTime);
+
+    if (match == null) {
+      throw StateError('Please select a valid appointment time.');
+    }
+
+    var hour = int.parse(match.group(1)!) % 12;
+    if (match.group(3) == 'PM') hour += 12;
+
+    final selectedDateTime = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      hour,
+      int.parse(match.group(2)!),
+    );
+
+    if (!selectedDateTime.isAfter(DateTime.now())) {
+      throw StateError('Please select a future appointment time.');
+    }
+
+    final bookings = await _db
+        .collection('appointments')
+        .where('patientId', isEqualTo: user.uid)
+        .get(const GetOptions(source: Source.server));
+
+    final userRef = _db.collection('users').doc(user.uid);
+    final appointmentRef = _db.collection('appointments').doc(existing.number);
+    final queueRef = _db.collection('queues').doc(existing.number);
+    final doctorRef = _db.collection('doctors').doc(existing.doctor.id);
+
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    final dateKey = '${date.year}-$month-$day';
+
+    return _db.runTransaction<Appointment>((transaction) async {
+      final userSnapshot = await transaction.get(userRef);
+      final appointmentSnapshot = await transaction.get(appointmentRef);
+      final queueSnapshot = await transaction.get(queueRef);
+      final doctorSnapshot = await transaction.get(doctorRef);
+
+      // Re-read the bookings found by the server query.
+      final otherBookings = <DocumentSnapshot<Map<String, dynamic>>>[];
+
+      for (final booking in bookings.docs) {
+        if (booking.id != existing.number) {
+          otherBookings.add(await transaction.get(booking.reference));
+        }
+      }
+
+      final saved = appointmentSnapshot.data();
+      final queue = queueSnapshot.data();
+      final doctor = doctorSnapshot.data();
+
+      if (userSnapshot.data()?['role'] != 'patient') {
+        throw StateError('A patient account is required.');
+      }
+
+      if (saved == null || saved['patientId'] != user.uid) {
+        throw StateError('This appointment was not found in your account.');
+      }
+
+      if (saved['status'] != 'Scheduled' ||
+          saved['type'] != 'Patient Booking') {
+        throw StateError('Only scheduled patient bookings can be rescheduled.');
+      }
+
+      if (saved['doctorId'] != existing.doctor.id) {
+        throw StateError(
+          'The doctor has changed. Reopen My Appointments and try again.',
+        );
+      }
+
+      final canChangeQueue =
+          queue != null &&
+          queue['patientId'] == user.uid &&
+          queue['status'] == 'Waiting' &&
+          queue['currentServing'] == 0 &&
+          queue['yourPosition'] == 1 &&
+          queue['totalInQueue'] == 1 &&
+          queue['peopleAhead'] == 0 &&
+          queue['estimatedMinutes'] == 0 &&
+          queue['positionConfirmed'] == false &&
+          queue['estimateConfirmed'] == false;
+
+      if (!canChangeQueue) {
+        throw StateError(
+          'Your live queue has already been updated. '
+          'Please contact reception to reschedule.',
+        );
+      }
+
+      final availableDates = doctor?['availableDates'];
+      final availableTimes = doctor?['availableTimeSlots'];
+
+      if (doctor?['isAvailable'] != true ||
+          availableDates is! List ||
+          !availableDates.contains(dateKey) ||
+          availableTimes is! List ||
+          !availableTimes.contains(selectedTime)) {
+        throw StateError(
+          'This slot is no longer available. Please select another slot.',
+        );
+      }
+
+      for (final booking in otherBookings) {
+        final data = booking.data();
+        if (data == null) continue;
+
+        final storedDate = data['date'];
+        final storedTime = data['time'];
+        final status = data['status'];
+        final normalizedStatus = status is String
+            ? status.trim().toLowerCase()
+            : '';
+
+        if (normalizedStatus == 'cancelled' || normalizedStatus == 'canceled') {
+          continue;
+        }
+
+        if (storedDate is! Timestamp || storedTime is! String) {
+          continue;
+        }
+
+        final bookedDate = storedDate.toDate();
+
+        if (data['doctorId'] == existing.doctor.id &&
+            bookedDate.year == selectedDate.year &&
+            bookedDate.month == selectedDate.month &&
+            bookedDate.day == selectedDate.day &&
+            storedTime.trim().toUpperCase() == selectedTime) {
+          throw StateError(
+            'You already have a booking with this doctor '
+            'at this date and time.',
+          );
+        }
+      }
+
+      String text(String key) {
+        final value = saved[key];
+        return value is String ? value : '';
+      }
+
+      final updated = Appointment(
+        number: existing.number,
+        doctor: existing.doctor,
+        date: selectedDate,
+        dateLabel:
+            '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+        time: selectedTime,
+        location: text('clinic'),
+        patientName: text('patientName'),
+        nic: text('nic'),
+        contactNumber: text('contactNumber'),
+        email: text('email'),
+      );
+
+      transaction.update(appointmentRef, {
+        'date': Timestamp.fromDate(selectedDate),
+        'time': selectedTime,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(queueRef, {
+        'appointmentTime': selectedTime,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      return updated;
+    });
+  }
 }

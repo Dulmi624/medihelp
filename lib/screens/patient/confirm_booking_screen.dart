@@ -25,8 +25,7 @@ class ConfirmBookingScreen extends StatefulWidget {
   final Appointment? existingAppointment;
 
   @override
-  State<ConfirmBookingScreen> createState() =>
-      _ConfirmBookingScreenState();
+  State<ConfirmBookingScreen> createState() => _ConfirmBookingScreenState();
 }
 
 class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
@@ -76,9 +75,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
     if (text.isEmpty) return 'Enter your NIC number.';
 
-    final valid = RegExp(
-      r'^(?:[0-9]{12}|[0-9]{9}[VvXx])$',
-    ).hasMatch(text);
+    final valid = RegExp(r'^(?:[0-9]{12}|[0-9]{9}[VvXx])$').hasMatch(text);
 
     if (!valid) {
       return 'Use 12 digits or 9 digits followed by V/X.';
@@ -96,9 +93,8 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
     if (text.isEmpty) return 'Enter your contact number.';
 
-    final valid = RegExp(
-      r'^(?:0[1-9][0-9]{8}|\+94[1-9][0-9]{8})$',
-    ).hasMatch(text);
+    final valid = RegExp(r'^(?:0[1-9][0-9]{8}|\+94[1-9][0-9]{8})$')
+        .hasMatch(text);
 
     if (!valid) {
       return 'Use 10 digits starting with 0, or +94 format.';
@@ -114,9 +110,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
     if (text.isEmpty) return null;
 
     if (text.length > 254 ||
-        !RegExp(
-          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-        ).hasMatch(text)) {
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)) {
       return 'Enter a valid email address.';
     }
 
@@ -124,9 +118,8 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
   }
 
   DateTime? _bookingDateTime() {
-    final match = RegExp(
-      r'^(0[1-9]|1[0-2]):([0-5][0-9]) (AM|PM)$',
-    ).firstMatch(widget.time);
+    final match = RegExp(r'^(0[1-9]|1[0-2]):([0-5][0-9]) (AM|PM)$')
+        .firstMatch(widget.time);
 
     if (match == null) return null;
 
@@ -148,9 +141,8 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
   void _showError(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _logError(Object error, StackTrace stackTrace) {
@@ -211,7 +203,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
         saved = await service.createBooking(
           draft: draft,
-          department: 'OPD',
+          department: widget.doctor.specialization,
         );
       } else {
         saved = oldAppointment.copyWith(
@@ -272,9 +264,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
       canPop: !_isSaving,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            editing ? 'Edit Patient Details' : 'Confirm Booking',
-          ),
+          title: Text(editing ? 'Edit Patient Details' : 'Confirm Booking'),
           automaticallyImplyLeading: !_isSaving,
         ),
         body: AbsorbPointer(
@@ -325,10 +315,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
                 const SizedBox(height: 24),
                 const Text(
                   'Patient Information',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 _FormField(
@@ -377,8 +364,8 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
                         label: _isSaving
                             ? 'Saving...'
                             : editing
-                                ? 'Save Changes'
-                                : 'Confirm Booking',
+                            ? 'Save Changes'
+                            : 'Confirm Booking',
                         onPressed: _confirm,
                       ),
                     ),
@@ -386,9 +373,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
                 ),
                 if (_isSaving) ...[
                   const SizedBox(height: 16),
-                  const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  const Center(child: CircularProgressIndicator()),
                 ],
               ],
             ),
@@ -400,10 +385,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-  });
+  const _DetailRow({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -446,10 +428,7 @@ class _FormField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       textCapitalization: textCapitalization,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-      ),
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       validator: validator,
     );
   }

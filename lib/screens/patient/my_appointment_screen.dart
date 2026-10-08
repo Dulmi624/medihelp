@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../models/appointment.dart';
 import '../../models/doctor.dart';
 import '../../services/appointment_store.dart';
+import '../../services/queue_service.dart';
 import '../../widgets/action_row.dart';
 import '../../widgets/patient_app_bar.dart';
 import '../../widgets/patient_bottom_nav.dart';
@@ -15,13 +16,15 @@ class MyAppointmentScreen extends StatefulWidget {
   const MyAppointmentScreen({super.key});
 
   @override
-  State<MyAppointmentScreen> createState() =>
-      _MyAppointmentScreenState();
+  State<MyAppointmentScreen> createState() => _MyAppointmentScreenState();
 }
 
 class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
+
+  bool _cancelBusy = false;
+  String? _cancellingNumber;
 
   String _text(Map<String, dynamic> data, String key) {
     final value = data[key];
@@ -35,9 +38,7 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
     final storedDate = data['date'];
 
     if (storedDate is! Timestamp) {
-      throw const FormatException(
-        'This appointment has an invalid date.',
-      );
+      throw const FormatException('This appointment has an invalid date.');
     }
 
     final date = storedDate.toDate();
@@ -69,6 +70,8 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
   }
 
   void _edit(Appointment appointment) {
+    if (_cancelBusy) return;
+
     Navigator.pushNamed(
       context,
       AppRoutes.confirmBooking,
@@ -81,13 +84,91 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
     );
   }
 
+  void _reschedule(Appointment appointment) {
+    if (_cancelBusy) return;
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.selectDateTime,
+      arguments: {
+        'doctor': appointment.doctor,
+        'existingAppointment': appointment,
+      },
+    );
+  }
+
   void _viewQueue(Appointment appointment) {
+    if (_cancelBusy) return;
+
     AppointmentStore.current = appointment;
 
-    Navigator.pushReplacementNamed(
-      context,
-      AppRoutes.queueStatus,
-    );
+    Navigator.pushReplacementNamed(context, AppRoutes.queueStatus);
+  }
+
+  Future<void> _cancelAppointment(Appointment appointment) async {
+    if (_cancelBusy) return;
+
+    setState(() => _cancelBusy = true);
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Cancel appointment?'),
+          content: const Text(
+            'Are you sure you want to cancel this appointment?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Keep appointment'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Cancel appointment'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || confirmed != true) return;
+
+      setState(() => _cancellingNumber = appointment.number);
+
+      await QueueService().remove(appointment.number);
+
+      if (AppointmentStore.current?.number == appointment.number) {
+        AppointmentStore.cancel();
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Appointment cancelled successfully.')),
+      );
+    } on StateError catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message.toString())));
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not cancel. Check your connection and try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cancelBusy = false;
+          _cancellingNumber = null;
+        });
+      }
+    }
   }
 
   Widget _message(String message, {bool loading = false}) {
@@ -100,10 +181,7 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
             ],
-            Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
+            Text(message, textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -128,7 +206,8 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
     final status = _text(data, 'status');
     final normalizedStatus = status.toLowerCase();
 
-    final canEdit = status == 'Scheduled' &&
+    final canEdit =
+        status == 'Scheduled' &&
         data['type'] == 'Patient Booking' &&
         document.id == appointment.number;
 
@@ -139,6 +218,8 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
       'checked-in',
       'checked in',
     ].contains(normalizedStatus);
+
+    final cancelling = _cancellingNumber == appointment.number;
 
     return Card(
       child: Padding(
@@ -195,18 +276,12 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
               icon: Icons.confirmation_number_outlined,
               text: appointment.number,
             ),
-            _Detail(
-              icon: Icons.person_outline,
-              text: appointment.patientName,
-            ),
+            _Detail(icon: Icons.person_outline, text: appointment.patientName),
             _Detail(
               icon: Icons.calendar_today_outlined,
               text: appointment.dateLabel,
             ),
-            _Detail(
-              icon: Icons.access_time,
-              text: appointment.time,
-            ),
+            _Detail(icon: Icons.access_time, text: appointment.time),
             _Detail(
               icon: Icons.location_on_outlined,
               text: appointment.location,
@@ -225,13 +300,27 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
                 subtitle: 'Update name and contact details',
                 onTap: () => _edit(appointment),
               ),
+              const SizedBox(height: 12),
+              ActionRow(
+                icon: Icons.calendar_month_outlined,
+                title: 'Reschedule Appointment',
+                subtitle: 'Choose another date and time',
+                onTap: () => _reschedule(appointment),
+              ),
+              const SizedBox(height: 12),
+              ActionRow(
+                icon: Icons.cancel_outlined,
+                title: cancelling ? 'Cancelling...' : 'Cancel Appointment',
+                subtitle: 'Cancel this booking',
+                onTap: () => _cancelAppointment(appointment),
+              ),
             ],
             if (canViewQueue) ...[
               const SizedBox(height: 12),
               ActionRow(
                 icon: Icons.people_outline,
                 title: 'View Queue Status',
-                subtitle: 'Check this appointment’s queue',
+                subtitle: 'Check the queue for this appointment',
                 onTap: () => _viewQueue(appointment),
               ),
             ],
@@ -241,9 +330,7 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
     );
   }
 
-  int _createdAt(
-    QueryDocumentSnapshot<Map<String, dynamic>> document,
-  ) {
+  int _createdAt(QueryDocumentSnapshot<Map<String, dynamic>> document) {
     final value = document.data()['createdAt'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
   }
@@ -263,10 +350,7 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
         }
 
         if (!snapshot.hasData) {
-          return _message(
-            'Loading your appointments...',
-            loading: true,
-          );
+          return _message('Loading your appointments...', loading: true);
         }
 
         final documents = snapshot.data!.docs.toList()
@@ -302,9 +386,7 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
         onGradient: false,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.page,
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           top: false,
           child: ListView(
@@ -313,12 +395,8 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
               StreamBuilder<User?>(
                 stream: _auth.authStateChanges(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return _message(
-                      'Loading...',
-                      loading: true,
-                    );
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return _message('Loading...', loading: true);
                   }
 
                   final user = snapshot.data;
@@ -336,17 +414,13 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
           ),
         ),
       ),
-      bottomNavigationBar:
-          const PatientBottomNav(currentIndex: 1),
+      bottomNavigationBar: const PatientBottomNav(currentIndex: 1),
     );
   }
 }
 
 class _Detail extends StatelessWidget {
-  const _Detail({
-    required this.icon,
-    required this.text,
-  });
+  const _Detail({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -364,19 +438,13 @@ class _Detail extends StatelessWidget {
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              icon,
-              color: AppColors.primary,
-              size: 18,
-            ),
+            child: Icon(icon, color: AppColors.primary, size: 18),
           ),
           const SizedBox(width: 11),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
         ],

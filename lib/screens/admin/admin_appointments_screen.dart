@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import 'admin_demo_store.dart';
 
 class AdminAppointmentsScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class AdminAppointmentsScreen extends StatefulWidget {
 class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
   final _searchController = TextEditingController();
   String _filter = 'All';
+  final Set<String> _saving = {};
 
   static const _statuses = [
     'Scheduled',
@@ -21,8 +23,8 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
     'Cancelled',
   ];
 
-  final _store = AdminDemoStore.instance;
-  List<DemoAppointment> get _appointments => _store.appointments;
+  final _store = AdminDataStore.instance;
+  List<AdminAppointment> get _appointments => _store.appointments;
 
   @override
   void initState() {
@@ -54,11 +56,20 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
     }
   }
 
-  Future<void> _changeStatus(DemoAppointment appointment) async {
+  Future<void> _changeStatus(AdminAppointment appointment) async {
+    if (_saving.contains(appointment.id)) return;
+    if (['Completed', 'Cancelled'].contains(appointment.status)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Completed/cancelled appointments cannot be reopened.'),
+        ),
+      );
+      return;
+    }
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
-        title: const Text('Change status — Demo'),
+        title: const Text('Change appointment status'),
         children: [
           for (final status in _statuses)
             SimpleDialogOption(
@@ -88,32 +99,46 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
       return;
     }
 
-    _store.updateAppointment(appointment, selected);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Demo status updated. Not saved to Firebase.'),
-      ),
-    );
+    setState(() => _saving.add(appointment.id));
+    try {
+      await _store.updateAppointment(appointment, selected);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Appointment status saved.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AdminDataStore.messageFor(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving.remove(appointment.id));
+    }
   }
 
-  Future<void> _showDetails(DemoAppointment appointment) async {
+  Future<void> _showDetails(AdminAppointment appointment) async {
     final edit = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Appointment Details'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _detail('Appointment', appointment.id),
-            _detail('Patient', appointment.patient),
-            _detail('Doctor', appointment.doctor),
-            _detail('Department', appointment.department),
-            _detail('Date', 'Today — sample data'),
-            _detail('Time', appointment.time),
-            _detail('Status', appointment.status),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _detail('Appointment', appointment.id),
+              _detail('Patient', appointment.patient),
+              _detail('Doctor', appointment.doctor),
+              _detail('Department', appointment.department),
+              _detail(
+                'Date',
+                '${appointment.date.day}/${appointment.date.month}/${appointment.date.year}',
+              ),
+              _detail('Time', appointment.time),
+              _detail('Status', appointment.status),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -141,6 +166,15 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_store.error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(_store.error!),
+        ),
+      );
+    }
+    if (_store.loading) return const Center(child: CircularProgressIndicator());
     final query = _searchController.text.trim().toLowerCase();
 
     final visible = _appointments.where((appointment) {
@@ -155,8 +189,10 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
       return matchesStatus && matchesSearch;
     }).toList();
 
-    return Column(
-      children: [
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+      child: Column(
+        children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Column(
@@ -164,11 +200,15 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
             children: [
               const Text(
                 'Appointments',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.text,
+                ),
               ),
               const SizedBox(height: 6),
               const Text(
-                'Demo mode • Sample data • Changes are temporary',
+                'Live Firestore appointments • All dates',
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 16),
@@ -227,7 +267,9 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                     return Card(
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: () => _showDetails(appointment),
+                        onTap: _saving.contains(appointment.id)
+                            ? null
+                            : () => _showDetails(appointment),
                         child: Padding(
                           padding: const EdgeInsets.all(14),
                           child: Column(
@@ -237,7 +279,11 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                                 children: [
                                   CircleAvatar(
                                     child: Text(
-                                      appointment.patient.split(' ').last,
+                                      appointment.patient.isEmpty
+                                          ? '?'
+                                          : appointment.patient
+                                                .substring(0, 1)
+                                                .toUpperCase(),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -260,7 +306,7 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 '${appointment.id} • '
-                                '${appointment.time}',
+                                '${appointment.date.day}/${appointment.date.month}/${appointment.date.year} • ${appointment.time}',
                               ),
                               const SizedBox(height: 10),
                               Container(
@@ -288,7 +334,8 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                   },
                 ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }

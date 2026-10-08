@@ -7,6 +7,7 @@ abstract final class AppColors {
   static const pageTop = Color(0xFF1E4FD8);
   static const pageMid = Color(0xFF4C9BFF);
   static const pageBottom = Color(0xFFEAF5FF);
+  static const adminCanvas = Color(0xFFF1F7FF);
   static const cardShadow = Color(0x40306FD8);
   static const glass = Color(0xD9FFFFFF);
   static const glassBorder = Color(0x80FFFFFF);
@@ -57,6 +58,11 @@ abstract final class AppGradients {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [Color(0xFFFFFFFF), Color(0xFFDCEEFF)],
+  );
+  static const adminCanvas = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFE9F4FF), Color(0xFFF8FBFF)],
   );
 }
 

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/routes.dart';
+import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import 'admin_appointments_screen.dart';
 import 'admin_queue_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_demo_store.dart';
+import '../../widgets/medical_logo.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -16,12 +18,13 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   int _selectedIndex = 0;
-  final _store = AdminDemoStore.instance;
+  final _store = AdminDataStore.instance;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_refresh);
+    _store.start();
   }
 
   void _refresh() {
@@ -31,6 +34,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   @override
   void dispose() {
     _store.removeListener(_refresh);
+    _store.stop();
     super.dispose();
   }
 
@@ -56,18 +60,76 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Widget _buildDashboard() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Welcome, Admin',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+    if (_store.error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_store.error!),
+            ),
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _store.start();
+                });
+              },
+              child: const Text('Retry'),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        const Text(
-          'Demo mode • Appointment and queue sample datasets are separate.',
-        ),
-        const SizedBox(height: 20),
+      );
+    }
+    if (_store.loading) return const Center(child: CircularProgressIndicator());
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: AppGradients.primary,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: const [
+                BoxShadow(
+                  color: AppColors.cardShadow,
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'GOOD MORNING',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Welcome, Admin',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Here is your live clinic overview for today.',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
         GridView.count(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
@@ -121,9 +183,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const Text('In queue includes Waiting and Called patients.'),
-        for (final department in ['OPD', 'Dental', 'Paediatrics'])
+        if (_store.departments.isEmpty) const Text('No departments yet.'),
+        for (final department in _store.departments)
           Card(
             child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primarySoft,
+                child: Text(
+                  department.substring(0, 1),
+                  style: const TextStyle(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
               title: Text(department),
               subtitle: Text(
                 '${_store.patients.where((p) => p.department == department && (p.status == 'Waiting' || p.status == 'Called')).length} in queue',
@@ -137,9 +210,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           'Recent Activity',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
+        const Text('Actions performed in this Admin session only.'),
+        if (_store.activity.isEmpty)
+          const Text('No actions in this session yet.'),
         for (final message in _store.activity.take(5))
           ListTile(leading: const Icon(Icons.history), title: Text(message)),
         const SizedBox(height: 24),
+        if (_store.skippedAppointments + _store.skippedQueues > 0)
+          Text(
+            '${_store.skippedAppointments} appointments and ${_store.skippedQueues} queue entries could not be linked or have missing fields. Ask the team to review older records.',
+          ),
         const Text(
           'Quick Access',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -148,7 +228,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         _quickLink('View Appointments', Icons.calendar_month, 1),
         _quickLink('Monitor Queue', Icons.people_outline, 2),
         _quickLink('View Reports', Icons.bar_chart, 3),
-      ],
+        ],
+      ),
     );
   }
 
@@ -169,7 +250,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[_selectedIndex]),
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(gradient: AppGradients.primary),
+        ),
+        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MedicalLogo(size: 30),
+            const SizedBox(width: 8),
+            Text(_titles[_selectedIndex]),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Log out',
@@ -188,6 +282,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
+        backgroundColor: Colors.white,
+        indicatorColor: AppColors.primarySoft,
+        elevation: 8,
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
           setState(() => _selectedIndex = index);
