@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme.dart';
+
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
   @override
@@ -287,12 +289,18 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+      children: [
       const Text(
         'Reports',
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          color: AppColors.text,
+        ),
       ),
       const SizedBox(height: 8),
       const Text(
@@ -383,6 +391,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           );
         },
       ),
-    ],
+      ],
+    ),
   );
 }

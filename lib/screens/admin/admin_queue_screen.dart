@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import 'admin_demo_store.dart';
 
 class AdminQueueScreen extends StatefulWidget {
@@ -372,108 +373,115 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
     final waitingCount = _count(visible, 'Waiting');
     final average = _averageWait(visible);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Queue Monitoring',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Live Firestore queue • Choose the appointment date',
-          style: TextStyle(color: Colors.grey),
-        ),
-        const SizedBox(height: 16),
-        DropdownButtonFormField<String>(
-          key: ValueKey(_department),
-          initialValue: _department,
-          decoration: const InputDecoration(
-            labelText: 'Department',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            for (final department in ['All', ..._departments])
-              DropdownMenuItem(value: department, child: Text(department)),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              setState(() => _department = value);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.calendar_month),
-            title: const Text('Selected Date'),
-            subtitle: Text(_dateLabel(_selectedDate)),
-            trailing: const Icon(Icons.edit_outlined),
-            onTap: _selectDate,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          children: [
-            ChoiceChip(
-              label: const Text('Queue'),
-              selected: !_showFlow,
-              onSelected: (_) => setState(() => _showFlow = false),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+        children: [
+          const Text(
+            'Queue Monitoring',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
             ),
-            ChoiceChip(
-              label: const Text('Patient Flow / Waiting Times'),
-              selected: _showFlow,
-              onSelected: (_) => setState(() => _showFlow = true),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Live Firestore queue • Choose the appointment date',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            key: ValueKey(_department),
+            initialValue: _department,
+            decoration: const InputDecoration(
+              labelText: 'Department',
+              border: OutlineInputBorder(),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_showFlow)
-          _flowView()
-        else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            items: [
+              for (final department in ['All', ..._departments])
+                DropdownMenuItem(value: department, child: Text(department)),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _department = value);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.calendar_month),
+              title: const Text('Selected Date'),
+              subtitle: Text(_dateLabel(_selectedDate)),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: _selectDate,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
             children: [
-              Expanded(
-                child: _summary(
-                  'Waiting',
-                  '$waitingCount',
-                  Icons.people_outline,
-                ),
+              ChoiceChip(
+                label: const Text('Queue'),
+                selected: !_showFlow,
+                onSelected: (_) => setState(() => _showFlow = false),
               ),
-              Expanded(
-                child: _summary(
-                  'Avg. estimated wait',
-                  average == null ? '—' : '${average.round()}m',
-                  Icons.schedule,
-                ),
-              ),
-              Expanded(
-                child: _summary(
-                  'In consultation',
-                  '${_count(visible, 'In Consultation')}',
-                  Icons.medical_services_outlined,
-                ),
+              ChoiceChip(
+                label: const Text('Patient Flow / Waiting Times'),
+                selected: _showFlow,
+                onSelected: (_) => setState(() => _showFlow = true),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _queueList(visible),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed:
-                waitingCount == 0 ||
-                    _calling ||
-                    !_sameDate(_selectedDate, DateTime.now())
-                ? null
-                : _callNext,
-            icon: const Icon(Icons.campaign_outlined),
-            label: Text(_calling ? 'Saving...' : 'Call Next Patient'),
-          ),
+          if (_showFlow)
+            _flowView()
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _summary(
+                    'Waiting',
+                    '$waitingCount',
+                    Icons.people_outline,
+                  ),
+                ),
+                Expanded(
+                  child: _summary(
+                    'Avg. estimated wait',
+                    average == null ? '—' : '${average.round()}m',
+                    Icons.schedule,
+                  ),
+                ),
+                Expanded(
+                  child: _summary(
+                    'In consultation',
+                    '${_count(visible, 'In Consultation')}',
+                    Icons.medical_services_outlined,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _queueList(visible),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed:
+                  waitingCount == 0 ||
+                      _calling ||
+                      !_sameDate(_selectedDate, DateTime.now())
+                  ? null
+                  : _callNext,
+              icon: const Icon(Icons.campaign_outlined),
+              label: Text(_calling ? 'Saving...' : 'Call Next Patient'),
+            ),
+          ],
+          const SizedBox(height: 24),
         ],
-        const SizedBox(height: 24),
-      ],
+      ),
     );
   }
 }

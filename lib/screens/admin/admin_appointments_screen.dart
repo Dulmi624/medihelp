@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import 'admin_demo_store.dart';
 
 class AdminAppointmentsScreen extends StatefulWidget {
@@ -188,8 +189,10 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
       return matchesStatus && matchesSearch;
     }).toList();
 
-    return Column(
-      children: [
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+      child: Column(
+        children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Column(
@@ -197,7 +200,11 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
             children: [
               const Text(
                 'Appointments',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.text,
+                ),
               ),
               const SizedBox(height: 6),
               const Text(
@@ -327,7 +334,8 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                   },
                 ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
