@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/routes.dart';
+import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import 'admin_appointments_screen.dart';
 import 'admin_queue_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_demo_store.dart';
+import '../../widgets/medical_logo.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -80,16 +82,54 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       );
     }
     if (_store.loading) return const Center(child: CircularProgressIndicator());
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Welcome, Admin',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        const Text('Live appointments and queues • Totals across all dates'),
-        const SizedBox(height: 20),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.adminCanvas),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: AppGradients.primary,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: const [
+                BoxShadow(
+                  color: AppColors.cardShadow,
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'GOOD MORNING',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Welcome, Admin',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Here is your live clinic overview for today.',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
         GridView.count(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
@@ -147,6 +187,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         for (final department in _store.departments)
           Card(
             child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primarySoft,
+                child: Text(
+                  department.substring(0, 1),
+                  style: const TextStyle(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
               title: Text(department),
               subtitle: Text(
                 '${_store.patients.where((p) => p.department == department && (p.status == 'Waiting' || p.status == 'Called')).length} in queue',
@@ -178,7 +228,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         _quickLink('View Appointments', Icons.calendar_month, 1),
         _quickLink('Monitor Queue', Icons.people_outline, 2),
         _quickLink('View Reports', Icons.bar_chart, 3),
-      ],
+        ],
+      ),
     );
   }
 
@@ -199,7 +250,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[_selectedIndex]),
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(gradient: AppGradients.primary),
+        ),
+        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MedicalLogo(size: 30),
+            const SizedBox(width: 8),
+            Text(_titles[_selectedIndex]),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Log out',
@@ -218,6 +282,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
+        backgroundColor: Colors.white,
+        indicatorColor: AppColors.primarySoft,
+        elevation: 8,
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
           setState(() => _selectedIndex = index);
