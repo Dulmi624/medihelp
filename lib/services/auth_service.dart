@@ -40,6 +40,7 @@ class AuthService {
         'email': email.trim(),
         'phone': phone.trim(),
       });
+      await credential.user!.updateDisplayName(name.trim());
       return null;
     } on FirebaseAuthException catch (error) {
       return _authErrorMessage(error);
@@ -50,6 +51,14 @@ class AuthService {
   }
 
   Future<void> signOut() => _firebaseAuth.signOut();
+
+  Future<String> getCurrentPatientName() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return 'Patient';
+    final document = await _firebaseFirestore.collection('users').doc(user.uid).get();
+    final storedName = document.data()?['name'] as String?;
+    return (storedName ?? user.displayName ?? user.email?.split('@').first ?? 'Patient').trim();
+  }
 
   Future<UserRole?> getCurrentUserRole() async {
     try {

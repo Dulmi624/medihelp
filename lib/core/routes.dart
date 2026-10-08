@@ -8,6 +8,7 @@ import '../screens/admin/admin_home_screen.dart';
 
 import '../screens/patient/patient_home_screen.dart';
 import '../screens/patient/booking_success_screen.dart';
+import '../screens/patient/coming_soon_screen.dart';
 import '../screens/patient/confirm_booking_screen.dart';
 import '../screens/patient/my_appointment_screen.dart';
 import '../screens/patient/notifications_screen.dart';
@@ -20,6 +21,8 @@ import '../screens/receptionist/receptionist_home_screen.dart';
 import '../screens/receptionist/appointment_management_screen.dart';
 import '../screens/receptionist/receptionist_queue_screen.dart';
 
+import '../screens/patient/hospital_info_screen.dart';
+import '../screens/patient/contact_us_screen.dart';
 import '../models/appointment.dart';
 import '../models/doctor.dart';
 
@@ -29,7 +32,11 @@ abstract final class AppRoutes {
   static const patientSignUp = '/patient-sign-up';
 
   static const patientHome = '/patient';
+  static const comingSoon = '/patient/coming-soon';
   static const selectDoctor = '/patient/select-doctor';
+  static const findDoctor = '/patient/find-doctor';
+  static const hospitalInfo = '/patient/hospital-info';
+  static const contactUs = '/patient/contact-us';
   static const selectDateTime = '/patient/select-date-time';
   static const confirmBooking = '/patient/confirm-booking';
   static const bookingSuccess = '/patient/booking-success';

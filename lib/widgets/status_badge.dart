@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 
-enum QueueStatus { waiting, scheduled, completed, cancelled }
+enum QueueStatus { waiting, scheduled, confirmed, completed, cancelled }
 
 class StatusBadge extends StatelessWidget {
   const StatusBadge({required this.status, super.key});
@@ -14,6 +14,7 @@ class StatusBadge extends StatelessWidget {
     final (label, color) = switch (status) {
       QueueStatus.waiting => ('Waiting', AppColors.warning),
       QueueStatus.scheduled => ('Scheduled', AppColors.primary),
+      QueueStatus.confirmed => ('Confirmed', AppColors.success),
       QueueStatus.completed => ('Completed', AppColors.success),
       QueueStatus.cancelled => ('Cancelled', AppColors.danger),
     };

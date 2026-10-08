@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 
 class CustomTextField extends StatefulWidget {
-  const CustomTextField({required this.label, required this.icon, this.controller, this.validator, this.keyboardType, this.isPassword = false, super.key});
+  const CustomTextField({
+    required this.label,
+    required this.icon,
+    this.controller,
+    this.validator,
+    this.keyboardType,
+    this.isPassword = false,
+    super.key,
+  });
 
   final String label;
   final IconData icon;
@@ -22,16 +30,23 @@ class _CustomTextFieldState extends State<CustomTextField> {
     return TextFormField(
       controller: widget.controller,
       obscureText: widget.isPassword && _obscureText,
-      keyboardType: widget.keyboardType ?? (widget.label == 'Email address' ? TextInputType.emailAddress : null),
+      keyboardType:
+          widget.keyboardType ??
+          (widget.label == 'Email address' ? TextInputType.emailAddress : null),
       validator: widget.validator,
       decoration: InputDecoration(
         labelText: widget.label,
+        floatingLabelBehavior: FloatingLabelBehavior.never,
         prefixIcon: Icon(widget.icon),
         suffixIcon: widget.isPassword
             ? IconButton(
                 tooltip: _obscureText ? 'Show password' : 'Hide password',
                 onPressed: () => setState(() => _obscureText = !_obscureText),
-                icon: Icon(_obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                icon: Icon(
+                  _obscureText
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
               )
             : null,
       ),
