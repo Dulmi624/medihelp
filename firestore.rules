@@ -2,27 +2,298 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
 
-    function isAdmin() {
-      return request.auth != null
-        && get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.role == 'admin';
+    function hasRole(role) {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    function isAdmin() { return hasRole('admin'); }
+    function isPatient() { return hasRole('patient'); }
+
+    function isStaff() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['admin', 'receptionist'];
+    }
+
+    function owns(d) {
+      return signedIn() && d.patientId == request.auth.uid;
+    }
+
+    function scheduled(status) {
+      return status in ['Scheduled', 'scheduled', 'Upcoming', 'upcoming'];
+    }
+
+    function waiting(status) {
+      return status in ['Waiting', 'waiting'];
+    }
+
+    function validAppointmentStatus(status) {
+      return status in [
+        'Scheduled', 'scheduled', 'Upcoming', 'upcoming',
+        'Checked In', 'checked_in', 'checked-in',
+        'Completed', 'completed',
+        'Cancelled', 'cancelled', 'Canceled', 'canceled'
+      ];
+    }
+
+    function validQueueStatus(status) {
+      return status in [
+        'Waiting', 'waiting', 'Called', 'called',
+        'In Consultation', 'in_consultation', 'in-consultation',
+        'Completed', 'completed', 'Cancelled', 'cancelled'
+      ];
+    }
+
+    function queueCanBeChanged(id) {
+      return !exists(/databases/$(database)/documents/queues/$(id))
+        || (owns(get(/databases/$(database)/documents/queues/$(id)).data)
+          && waiting(get(/databases/$(database)/documents/queues/$(id)).data.status));
+    }
+
+    function matchingPair(a, q, id) {
+      return a.appointmentId == id && a.appointmentNumber == id
+        && q.appointmentId == id && q.queueNumber == id
+        && a.patientId == q.patientId && a.patientName == q.patientName
+        && a.doctorId == q.doctorId && a.doctorName == q.doctorName
+        && a.department == q.department && a.clinic == q.clinic
+        && a.time == q.appointmentTime;
+    }
+
+    function patientAppointment(d, id) {
+      return d.keys().hasAll([
+          'appointmentId', 'appointmentNumber', 'patientId',
+          'patientName', 'doctorId', 'doctorName', 'department', 'clinic',
+          'date', 'time', 'nic', 'contactNumber', 'email', 'status', 'type',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'appointmentId', 'appointmentNumber', 'patientId',
+          'patientName', 'doctorId', 'doctorName', 'department', 'clinic',
+          'date', 'time', 'nic', 'contactNumber', 'email', 'status', 'type',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && owns(d) && d.appointmentId == id && d.appointmentNumber == id
+        && d.patientName is string && d.patientName.size() <= 200
+        && d.doctorId is string && d.doctorId.size() > 0
+        && d.doctorName is string && d.department is string && d.clinic is string
+        && d.date is timestamp && d.time is string
+        && d.nic is string && d.contactNumber is string && d.email is string
+        && d.status == 'Scheduled' && d.type == 'Patient Booking'
+        && d.notes is string && d.createdAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    function initialQueue(d, id) {
+      return d.keys().hasAll([
+          'appointmentId', 'patientId', 'patientName',
+          'doctorId', 'doctorName', 'department', 'clinic', 'updatedAt',
+          'queueNumber', 'appointmentTime', 'status', 'currentServing',
+          'yourPosition', 'totalInQueue', 'peopleAhead', 'estimatedMinutes',
+          'positionConfirmed', 'estimateConfirmed', 'notes', 'createdAt'
+        ])
+        && d.keys().hasOnly([
+          'appointmentId', 'patientId', 'patientName',
+          'doctorId', 'doctorName', 'department', 'clinic', 'updatedAt',
+          'queueNumber', 'appointmentTime', 'status', 'currentServing',
+          'yourPosition', 'totalInQueue', 'peopleAhead', 'estimatedMinutes',
+          'positionConfirmed', 'estimateConfirmed', 'notes', 'createdAt'
+        ])
+        && owns(d) && d.appointmentId == id && d.queueNumber == id
+        && d.status == 'Waiting' && d.currentServing == 0
+        && d.yourPosition == 1 && d.totalInQueue == 1
+        && d.peopleAhead == 0 && d.estimatedMinutes == 0
+        && d.positionConfirmed == false && d.estimateConfirmed == false
+        && d.notes is string && d.createdAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    match /doctors/{doctorId} {
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     match /users/{userId} {
-      allow read: if request.auth != null
-        && (request.auth.uid == userId || isAdmin());
+      allow read: if signedIn()
+        && (request.auth.uid == userId || isStaff());
 
-      allow create: if request.auth != null
+      allow create: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.role == 'patient';
 
-      allow update: if request.auth != null
+      allow update: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.role == resource.data.role;
 
       allow delete: if false;
+    }
+
+    match /appointments/{id} {
+      // Booking transactions read their new IDs before creating them.
+      allow get: if isStaff()
+        || (isPatient() && (resource == null || owns(resource.data)));
+
+      allow list: if isStaff() || (isPatient() && owns(resource.data));
+
+      allow create: if (
+          isPatient()
+          && patientAppointment(request.resource.data, id)
+          && request.resource.data.createdAt == request.time
+          && matchingPair(
+            request.resource.data,
+            getAfter(/databases/$(database)/documents/queues/$(id)).data,
+            id
+          )
+          && initialQueue(
+            getAfter(/databases/$(database)/documents/queues/$(id)).data,
+            id
+          )
+        )
+        || (
+          isStaff()
+          && request.resource.data.patientId is string
+          && request.resource.data.patientId.size() > 0
+          && request.resource.data.date is timestamp
+          && validAppointmentStatus(request.resource.data.status)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+        );
+
+      allow update: if (
+          isPatient()
+          && owns(resource.data)
+          && scheduled(resource.data.status)
+          && queueCanBeChanged(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'patientName', 'doctorId', 'doctorName', 'department', 'clinic',
+            'date', 'time', 'nic', 'contactNumber', 'email', 'status', 'updatedAt'
+          ])
+          && request.resource.data.updatedAt == request.time
+          && (
+            (
+              patientAppointment(request.resource.data, id)
+              && matchingPair(
+                request.resource.data,
+                getAfter(/databases/$(database)/documents/queues/$(id)).data,
+                id
+              )
+              && initialQueue(
+                getAfter(/databases/$(database)/documents/queues/$(id)).data,
+                id
+              )
+            )
+            || (
+              request.resource.data.status == 'Cancelled'
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'updatedAt'])
+              && !existsAfter(/databases/$(database)/documents/queues/$(id))
+            )
+          )
+        )
+        || (
+          isStaff()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'patientName', 'doctorId', 'doctorName', 'department', 'clinic',
+            'date', 'time', 'nic', 'contactNumber', 'email', 'status', 'type',
+            'notes', 'updatedAt'
+          ])
+          && validAppointmentStatus(request.resource.data.status)
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['date'])
+            || request.resource.data.date is timestamp
+          )
+          && request.resource.data.updatedAt == request.time
+        );
+
+      allow delete: if false;
+    }
+
+    match /queues/{id} {
+      allow get: if isStaff()
+        || (isPatient() && (resource == null || owns(resource.data)));
+
+      allow list: if isStaff() || (isPatient() && owns(resource.data));
+
+      allow create: if (
+          isPatient()
+          && initialQueue(request.resource.data, id)
+          && request.resource.data.createdAt == request.time
+          && scheduled(
+            getAfter(/databases/$(database)/documents/appointments/$(id)).data.status
+          )
+          && matchingPair(
+            getAfter(/databases/$(database)/documents/appointments/$(id)).data,
+            request.resource.data,
+            id
+          )
+        )
+        || (
+          isStaff()
+          && request.resource.data.appointmentId == id
+          && request.resource.data.patientId is string
+          && validQueueStatus(request.resource.data.status)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+        );
+
+      allow update: if (
+          isPatient()
+          && owns(resource.data)
+          && waiting(resource.data.status)
+          && initialQueue(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.notes == resource.data.notes
+          && scheduled(
+            get(/databases/$(database)/documents/appointments/$(id)).data.status
+          )
+          && scheduled(
+            getAfter(/databases/$(database)/documents/appointments/$(id)).data.status
+          )
+          && getAfter(/databases/$(database)/documents/appointments/$(id)).data.updatedAt
+            == request.time
+          && matchingPair(
+            getAfter(/databases/$(database)/documents/appointments/$(id)).data,
+            request.resource.data,
+            id
+          )
+        )
+        || (
+          isStaff()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'patientName', 'doctorId', 'doctorName', 'department', 'clinic',
+            'appointmentTime', 'status', 'notes', 'updatedAt',
+            'positionConfirmed', 'estimateConfirmed'
+          ])
+          && validQueueStatus(request.resource.data.status)
+          && request.resource.data.updatedAt == request.time
+        )
+        // Admin recalculation does not change the last status-update timestamp.
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'currentServing', 'yourPosition', 'totalInQueue', 'peopleAhead',
+            'estimatedMinutes', 'completedCount', 'waitingCount', 'totalToday',
+            'positionConfirmed', 'estimateConfirmed', 'minutesPerConsultation',
+            'metricsUpdatedAt'
+          ])
+          && request.resource.data.metricsUpdatedAt == request.time
+        );
+
+      allow delete: if isStaff()
+        || (
+          isPatient()
+          && (
+            resource == null
+            || (owns(resource.data) && waiting(resource.data.status))
+          )
+          && owns(
+            getAfter(/databases/$(database)/documents/appointments/$(id)).data
+          )
+          && getAfter(/databases/$(database)/documents/appointments/$(id)).data.status
+            == 'Cancelled'
+        );
     }
 
     match /admin_reports/{reportId} {
@@ -30,14 +301,12 @@ service cloud.firestore {
         let d = request.resource.data;
 
         return d.keys().hasAll([
-            'title', 'type', 'driveLink',
-            'periodStart', 'periodEnd',
-            'createdBy', 'createdAt', 'updatedAt'
+            'title', 'type', 'driveLink', 'periodStart',
+            'periodEnd', 'createdBy', 'createdAt', 'updatedAt'
           ])
           && d.keys().hasOnly([
-            'title', 'type', 'driveLink',
-            'periodStart', 'periodEnd',
-            'createdBy', 'createdAt', 'updatedAt'
+            'title', 'type', 'driveLink', 'periodStart',
+            'periodEnd', 'createdBy', 'createdAt', 'updatedAt'
           ])
           && d.title is string
           && d.title.size() > 0
@@ -72,11 +341,6 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
     }
 
-    // Preserve existing temporary access for other collections.
-    match /{collection}/{document=**} {
-      allow read, write: if collection != 'admin_reports'
-        && collection != 'users'
-        && request.time < timestamp.date(2026, 10, 31);
-    }
+    // Collections and subcollections without an explicit rule are denied.
   }
 }

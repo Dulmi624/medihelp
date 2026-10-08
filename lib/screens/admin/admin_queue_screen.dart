@@ -306,7 +306,8 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
           ),
         const SizedBox(height: 8),
         const Text(
-          'Estimates are shown only when confirmed for all waiting patients. '
+          'Estimates use 10 minutes per person ahead and update while an Admin is online. '
+          'Estimates are shown only when calculated for all waiting patients. '
           'Call Next uses booking creation order, not a hospital-issued queue number.',
           style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
@@ -384,6 +385,11 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
           'Live Firestore queue • Choose the appointment date',
           style: TextStyle(color: Colors.grey),
         ),
+        if (_store.metricsError != null)
+          Text(
+            'Queue calculation: ${_store.metricsError}',
+            style: const TextStyle(color: Colors.red),
+          ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           key: ValueKey(_department),

@@ -4,7 +4,6 @@ import '../../core/routes.dart';
 import '../../models/appointment.dart';
 import '../../core/theme.dart';
 import '../../services/appointment_store.dart';
-import '../../services/dummy_data.dart';
 import '../../services/queue_service.dart';
 import '../../widgets/action_row.dart';
 import '../../widgets/patient_app_bar.dart';
@@ -18,9 +17,12 @@ class MyAppointmentScreen extends StatefulWidget {
 }
 
 class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
+  late final Stream<Appointment?> _appointments =
+      AppointmentStore.watchCurrent();
   bool _cancelling = false;
   void _showActions(BuildContext context) {
-    final appointment = AppointmentStore.current ?? DummyData.appointment;
+    final appointment = AppointmentStore.current;
+    if (appointment == null || appointment.isCancelled) return;
     showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
@@ -115,177 +117,209 @@ class _MyAppointmentScreenState extends State<MyAppointmentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appointment = AppointmentStore.current ?? DummyData.appointment;
-    final cancelled = appointment.isCancelled;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: const PatientAppBar(
-        title: 'My Appointment',
-        subtitle: 'Your health, our priority',
-        subtitleIcon: Icons.favorite,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
-        child: SafeArea(
-          top: false,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 92, 20, 24),
-            children: [
-              if (cancelled)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('Your appointment has been cancelled.'),
-                  ),
-                )
-              else ...[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: AppGradients.doctorBanner,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Row(
-                            children: [
-                              const CircleAvatar(
-                                radius: 29,
-                                backgroundColor: AppColors.surface,
-                                child: Icon(
-                                  Icons.person,
-                                  color: AppColors.primary,
-                                  size: 32,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      appointment.doctor.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      appointment.doctor.specialization,
-                                      style: const TextStyle(
-                                        color: AppColors.primaryDark,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      appointment.doctor.location,
-                                      style: const TextStyle(
-                                        color: AppColors.mutedText,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.add,
-                                  color: AppColors.onPrimary,
-                                  size: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        _Detail(
-                          icon: Icons.calendar_today_outlined,
-                          text: appointment.dateLabel,
-                        ),
-                        _Detail(
-                          icon: Icons.access_time,
-                          text: appointment.time,
-                        ),
-                        _Detail(
-                          icon: Icons.location_on_outlined,
-                          text: appointment.location,
-                        ),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withAlpha(22),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                color: AppColors.success,
-                                size: 20,
-                              ),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Confirmed',
-                                  style: TextStyle(
-                                    color: AppColors.success,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right,
-                                color: AppColors.success,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ActionRow(
-                  icon: Icons.people_outline,
-                  title: 'View Queue Status',
-                  subtitle: 'Check your current position',
-                  onTap: () => Navigator.pushReplacementNamed(
-                    context,
-                    AppRoutes.queueStatus,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              ActionRow(
-                icon: Icons.edit_calendar_outlined,
-                title: 'Reschedule / Cancel',
-                subtitle: 'Manage your appointment',
-                onTap: () => _showActions(context),
-              ),
-            ],
+    return StreamBuilder<Appointment?>(
+      stream: _appointments,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _messagePage(
+            'Could not load your appointment. Check your connection and permissions.',
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final appointment = snapshot.data;
+        if (appointment == null) {
+          return _messagePage(
+            'No saved appointment. Book an appointment first.',
+          );
+        }
+        final cancelled = appointment.isCancelled;
+        return Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: const PatientAppBar(
+            title: 'My Appointment',
+            subtitle: 'Your health, our priority',
+            subtitleIcon: Icons.favorite,
           ),
-        ),
-      ),
-      bottomNavigationBar: const PatientBottomNav(currentIndex: 1),
+          body: Container(
+            decoration: const BoxDecoration(gradient: AppGradients.page),
+            child: SafeArea(
+              top: false,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 92, 20, 24),
+                children: [
+                  if (cancelled)
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text('Your appointment has been cancelled.'),
+                      ),
+                    )
+                  else ...[
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: AppGradients.doctorBanner,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Row(
+                                children: [
+                                  const CircleAvatar(
+                                    radius: 29,
+                                    backgroundColor: AppColors.surface,
+                                    child: Icon(
+                                      Icons.person,
+                                      color: AppColors.primary,
+                                      size: 32,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          appointment.doctor.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          appointment.doctor.specialization,
+                                          style: const TextStyle(
+                                            color: AppColors.primaryDark,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          appointment.doctor.location,
+                                          style: const TextStyle(
+                                            color: AppColors.mutedText,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.add,
+                                      color: AppColors.onPrimary,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            _Detail(
+                              icon: Icons.calendar_today_outlined,
+                              text: appointment.dateLabel,
+                            ),
+                            _Detail(
+                              icon: Icons.access_time,
+                              text: appointment.time,
+                            ),
+                            _Detail(
+                              icon: Icons.location_on_outlined,
+                              text: appointment.location,
+                            ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withAlpha(22),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: AppColors.success,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Confirmed',
+                                      style: TextStyle(
+                                        color: AppColors.success,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: AppColors.success,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ActionRow(
+                      icon: Icons.people_outline,
+                      title: 'View Queue Status',
+                      subtitle: 'Check your current position',
+                      onTap: () => Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.queueStatus,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  ActionRow(
+                    icon: Icons.edit_calendar_outlined,
+                    title: 'Reschedule / Cancel',
+                    subtitle: 'Manage your appointment',
+                    onTap: () => _showActions(context),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          bottomNavigationBar: const PatientBottomNav(currentIndex: 1),
+        );
+      },
     );
   }
+
+  Widget _messagePage(String text) => Scaffold(
+    appBar: const PatientAppBar(
+      title: 'My Appointment',
+      subtitle: 'Your saved booking',
+    ),
+    body: Center(
+      child: Padding(padding: const EdgeInsets.all(24), child: Text(text)),
+    ),
+    bottomNavigationBar: const PatientBottomNav(currentIndex: 1),
+  );
 }
 
 class _Detail extends StatelessWidget {

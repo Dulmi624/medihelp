@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../services/queue_metrics_service.dart';
+import '../../services/data_compatibility.dart';
+
 // Filename retained so existing imports continue to work. No demo data.
 class AdminDataStore extends ChangeNotifier {
   AdminDataStore._();
@@ -13,6 +16,13 @@ class AdminDataStore extends ChangeNotifier {
   List<AdminQueuePatient> patients = [];
   final List<String> activity = [];
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _queues = [];
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _appointmentDocs = [];
+  bool _appointmentsServer = false;
+  bool _queuesServer = false;
+  bool _metricsRunning = false;
+  bool _metricsRequested = false;
+  String? metricsError;
+  static const consultationMinutes = 10;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _appointmentsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _queuesSub;
   int _session = 0;
@@ -37,11 +47,15 @@ class AdminDataStore extends ChangeNotifier {
       if (session != _session) return;
       _appointmentsSub = _db
           .collection('appointments')
-          .snapshots()
+          .snapshots(includeMetadataChanges: true)
           .listen(
             (snapshot) {
               if (session != _session) return;
               skippedAppointments = 0;
+              _appointmentDocs = snapshot.docs;
+              _appointmentsServer =
+                  !snapshot.metadata.isFromCache &&
+                  !snapshot.metadata.hasPendingWrites;
               final parsed = <AdminAppointment>[];
               for (final doc in snapshot.docs) {
                 final value = AdminAppointment.fromDocument(doc);
@@ -55,6 +69,7 @@ class AdminDataStore extends ChangeNotifier {
               _appointmentsReady = true;
               _appointmentsError = null;
               _joinQueues();
+              _scheduleMetrics();
               notifyListeners();
             },
             onError: (Object e) {
@@ -66,14 +81,18 @@ class AdminDataStore extends ChangeNotifier {
           );
       _queuesSub = _db
           .collection('queues')
-          .snapshots()
+          .snapshots(includeMetadataChanges: true)
           .listen(
             (snapshot) {
               if (session != _session) return;
               _queues = snapshot.docs;
+              _queuesServer =
+                  !snapshot.metadata.isFromCache &&
+                  !snapshot.metadata.hasPendingWrites;
               _queuesReady = true;
               _queuesError = null;
               _joinQueues();
+              _scheduleMetrics();
               notifyListeners();
             },
             onError: (Object e) {
@@ -101,6 +120,11 @@ class AdminDataStore extends ChangeNotifier {
     appointments = [];
     patients = [];
     _queues = [];
+    _appointmentDocs = [];
+    _appointmentsServer = false;
+    _queuesServer = false;
+    _metricsRequested = false;
+    metricsError = null;
     activity.clear();
     _appointmentsReady = false;
     _queuesReady = false;
@@ -122,7 +146,7 @@ class AdminDataStore extends ChangeNotifier {
         skippedQueues++;
         continue;
       }
-      final status = _string(data, 'status');
+      final status = DataCompatibility.queueStatus(data['status']);
       if (![
         'Waiting',
         'Called',
@@ -140,6 +164,7 @@ class AdminDataStore extends ChangeNotifier {
           number: _string(data, 'queueNumber', doc.id),
           name: _string(data, 'patientName', appointment.patient),
           department: _string(data, 'department', appointment.department),
+          doctorId: appointment.doctorId,
           date: appointment.date,
           status: status,
           createdAt: _date(data['createdAt']) ?? appointment.createdAt,
@@ -160,6 +185,45 @@ class AdminDataStore extends ChangeNotifier {
   static int compareQueue(AdminQueuePatient a, AdminQueuePatient b) {
     final order = a.createdAt.compareTo(b.createdAt);
     return order != 0 ? order : a.id.compareTo(b.id);
+  }
+
+  void _scheduleMetrics() {
+    _metricsRequested = true;
+    if (_metricsRunning ||
+        !_appointmentsServer ||
+        !_queuesServer ||
+        loading ||
+        error != null) {
+      return;
+    }
+    _syncMetrics();
+  }
+
+  Future<void> _syncMetrics() async {
+    _metricsRunning = true;
+    final session = _session;
+    try {
+      while (_metricsRequested &&
+          session == _session &&
+          _appointmentsServer &&
+          _queuesServer) {
+        _metricsRequested = false;
+        await QueueMetricsService(_db).refresh(
+          List.of(_queues),
+          List.of(_appointmentDocs),
+          minutesPerConsultation: consultationMinutes,
+        );
+        if (session != _session) return;
+        metricsError = null;
+      }
+    } catch (e) {
+      if (session == _session) metricsError = messageFor(e);
+    } finally {
+      _metricsRunning = false;
+      if (session == _session) notifyListeners();
+      // A new Admin session may have arrived while an old job finished.
+      if (session != _session && _metricsRequested) _scheduleMetrics();
+    }
   }
 
   Future<void> _requireAdmin() async {
@@ -185,7 +249,9 @@ class AdminDataStore extends ChangeNotifier {
     await _db.runTransaction((tx) async {
       final snapshot = await tx.get(ref);
       final queue = await tx.get(queueRef);
-      final current = snapshot.data()?['status'];
+      final current = DataCompatibility.appointmentStatus(
+        snapshot.data()?['status'],
+      );
       if (!snapshot.exists) throw StateError('This appointment was removed.');
       if (current != appointment.status) {
         throw StateError(
@@ -226,16 +292,64 @@ class AdminDataStore extends ChangeNotifier {
     final appointmentRef = _db
         .collection('appointments')
         .doc(patient.appointmentId);
+    final peers = patients
+        .where(
+          (p) =>
+              p.id != patient.id &&
+              p.doctorId == patient.doctorId &&
+              p.date.year == patient.date.year &&
+              p.date.month == patient.date.month &&
+              p.date.day == patient.date.day,
+        )
+        .toList();
     await _db.runTransaction((tx) async {
       final queue = await tx.get(ref);
       final appointment = await tx.get(appointmentRef);
       final data = appointment.data();
+      // Read peers before writing. Concurrent callers retry if the same
+      // doctor/date queue changes; a doctor serves one patient at a time.
+      if (status == 'Called') {
+        for (final peer in peers) {
+          final peerQueue = await tx.get(_db.collection('queues').doc(peer.id));
+          final peerAppointment = await tx.get(
+            _db.collection('appointments').doc(peer.appointmentId),
+          );
+          final a = peerAppointment.data();
+          final d = _date(a?['date']);
+          if (d == null ||
+              a?['doctorId'] != data?['doctorId'] ||
+              DataCompatibility.date(data?['date']) == null ||
+              !_sameDay(d, DataCompatibility.date(data?['date'])!) ||
+              [
+                'Cancelled',
+                'Completed',
+              ].contains(DataCompatibility.appointmentStatus(a?['status']))) {
+            continue;
+          }
+          final peerStatus = DataCompatibility.queueStatus(
+            peerQueue.data()?['status'],
+          );
+          if (peerStatus == 'Called' || peerStatus == 'In Consultation') {
+            throw StateError(
+              'This doctor already has a patient called/in consultation. Complete that consultation first.',
+            );
+          }
+          if (peerStatus == 'Waiting' && compareQueue(peer, patient) < 0) {
+            throw StateError(
+              'An earlier patient is waiting. Refresh and call the first patient.',
+            );
+          }
+        }
+      }
       if (!queue.exists ||
           data == null ||
-          ['Cancelled', 'Completed'].contains(data['status'])) {
+          [
+            'Cancelled',
+            'Completed',
+          ].contains(DataCompatibility.appointmentStatus(data['status']))) {
         throw StateError('This queue entry is no longer active.');
       }
-      final current = queue.data()?['status'];
+      final current = DataCompatibility.queueStatus(queue.data()?['status']);
       final allowed =
           (current == 'Waiting' && status == 'Called') ||
           (current == 'Called' && status == 'In Consultation') ||
@@ -289,7 +403,9 @@ String _string(Map<String, dynamic> data, String key, [String fallback = '']) {
   return value is String && value.trim().isNotEmpty ? value.trim() : fallback;
 }
 
-DateTime? _date(dynamic value) => value is Timestamp ? value.toDate() : null;
+DateTime? _date(dynamic value) => DataCompatibility.date(value);
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 class AdminAppointment {
   const AdminAppointment({
@@ -301,8 +417,10 @@ class AdminAppointment {
     required this.status,
     required this.date,
     required this.createdAt,
+    this.doctorId = '',
   });
   final String id, patient, doctor, department, time, status;
+  final String doctorId;
   final DateTime date, createdAt;
   static AdminAppointment? fromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
@@ -314,9 +432,10 @@ class AdminAppointment {
       id: doc.id,
       patient: _string(data, 'patientName', 'Unnamed patient'),
       doctor: _string(data, 'doctorName', 'Unknown doctor'),
+      doctorId: _string(data, 'doctorId'),
       department: _string(data, 'department', 'Unspecified'),
       time: _string(data, 'time'),
-      status: _string(data, 'status', 'Unknown'),
+      status: DataCompatibility.appointmentStatus(data['status']),
       date: date,
       createdAt: _date(data['createdAt']) ?? date,
     );
@@ -335,8 +454,10 @@ class AdminQueuePatient {
     required this.waitMinutes,
     required this.estimateConfirmed,
     required this.status,
+    this.doctorId = '',
   });
   final String id, appointmentId, number, name, department, status;
+  final String doctorId;
   final DateTime date, createdAt;
   final int waitMinutes;
   final bool estimateConfirmed;

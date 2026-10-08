@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/appointment.dart';
 import '../models/queue_entry.dart';
+import 'data_compatibility.dart';
 
 class QueueService {
   QueueService({FirebaseFirestore? firestore, FirebaseAuth? auth})
@@ -19,10 +20,16 @@ class QueueService {
     return _firestore
         .collection('queues')
         .doc(appointmentNumber)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .map((snapshot) {
           final data = snapshot.data();
-          return data == null ? null : QueueEntry.fromMap(data);
+          return data == null
+              ? null
+              : QueueEntry.fromMap({
+                  ...data,
+                  '_fromCache': snapshot.metadata.isFromCache,
+                  'status': DataCompatibility.queueStatus(data['status']),
+                });
         });
   }
 
@@ -47,10 +54,12 @@ class QueueService {
           'This is an older booking. Please make a new appointment.',
         );
       }
-      if (old != null && old['status'] != 'Scheduled') {
+      if (old != null &&
+          DataCompatibility.appointmentStatus(old['status']) != 'Scheduled') {
         throw StateError('Only scheduled appointments can be rescheduled.');
       }
-      if (oldQueue != null && oldQueue['status'] != 'Waiting') {
+      if (oldQueue != null &&
+          DataCompatibility.queueStatus(oldQueue['status']) != 'Waiting') {
         throw StateError(
           'This queue is already being served. Contact reception.',
         );
@@ -122,9 +131,13 @@ class QueueService {
       if (data['patientId'] != uid) {
         throw StateError('This appointment belongs to another patient.');
       }
-      if (data['status'] == 'Cancelled') return;
-      if (data['status'] != 'Scheduled' ||
-          (queue.exists && queue.data()?['status'] != 'Waiting')) {
+      if (DataCompatibility.appointmentStatus(data['status']) == 'Cancelled') {
+        return;
+      }
+      if (DataCompatibility.appointmentStatus(data['status']) != 'Scheduled' ||
+          (queue.exists &&
+              DataCompatibility.queueStatus(queue.data()?['status']) !=
+                  'Waiting')) {
         throw StateError(
           'This appointment cannot be cancelled here. Contact reception.',
         );
